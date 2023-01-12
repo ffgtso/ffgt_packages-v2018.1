@@ -10,6 +10,9 @@
 # Hmm, looks like it's possible to have Gluon apply patches to itself?
 # Anyone willing to explain that magic to me? -- wusel, 2018-07-19 FIXME!
 
+# HACK, FIXME; if /bin/wget does not exists, create a symlink from /usr/bin/wget
+if [ ! -e /bin/wget ]; then ln -s /usr/bin/wget /bin/wget ; fi
+
 START=1
 
 if [ -e /gluon/config-mode/model/gluon-config-mode/wizard-ffgt.lua ]; then

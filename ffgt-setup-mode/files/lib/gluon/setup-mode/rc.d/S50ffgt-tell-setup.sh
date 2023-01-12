@@ -3,6 +3,9 @@
 
 START=50
 
+# HACK, FIXME; if /bin/wget does not exists, create a symlink from /usr/bin/wget
+if [ ! -e /bin/wget ]; then ln -s /usr/bin/wget /bin/wget ; fi
+
 # Run every 15 seconds ...
 /lib/gluon/config-mode/notify-setup.sh force
 ((sleep 15 ; /lib/gluon/setup-mode/rc.d/S50ffgt-tell-setup.sh)&)
