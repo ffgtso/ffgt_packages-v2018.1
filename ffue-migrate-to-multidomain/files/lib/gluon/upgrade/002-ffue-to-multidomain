@@ -5,11 +5,16 @@ do
  meshname=$(echo $i | awk '{gsub("/$", "", $1); gsub("/stable/sysupgrade", "", $1); n=split($1, a, "/"); printf("%s", a[n]);}')
 done
 
-echo "Migrating FFUE-FW for ${meshname} to Gluon Multidomain ..."
+if [ "${meshname}" = "unified" ]; then
+ echo "Welcome to Uelzen Unified Firmware!"
+ exit 0
+fi
+
+echo "Migrating FFUE-FW for ${meshname} to Uelzen Unified Firmware ..."
 
 domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/)
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
- echo "No match for Mesh ${domain} in /lib/gluon/domains/, setting do default domain (uez)."
+ echo "No match for mesh ${domain} in /lib/gluon/domains/, setting do default (uez)."
  domain=uez
 fi
 
