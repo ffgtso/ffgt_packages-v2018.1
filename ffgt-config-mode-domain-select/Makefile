@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=ffgt-config-mode-domain-select
 PKG_VERSION:=1
 
-include ../gluon.mk
+include $(TOPDIR)/../package/gluon.mk
 
 define Package/ffgt-config-mode-domain-select
   TITLE:=UI for changing the node-config
