@@ -6,18 +6,26 @@ do
 done
 
 if [ "${meshname}" = "unified" ]; then
- echo "Welcome to Uelzen Unified Firmware!"
+ logger "Welcome to Uelzen Unified Firmware!"
  exit 0
 fi
 
-echo "Migrating FFUE-FW for ${meshname} to Uelzen Unified Firmware ..."
+logger "Migrating FFUE-FW for ${meshname} to Uelzen Unified Firmware ..."
 
 domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/)
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
- echo "No match for mesh ${domain} in /lib/gluon/domains/, setting do default (uez)."
+ logger "No match for mesh ${domain} in /lib/gluon/domains/, setting do default (uez)."
  domain=uez
 fi
 
-echo "Selected Domain: ${domain}"
-uci set gluon.core.switch_domain=${domain} ||:
-uci commit gluon ||:
+logger "Selected Domain: ${domain}."
+
+curdom=$(uci get gluon.core.domain)
+if [ "${curdom}" != "${domain}" ]; then
+ logger "Setting domain: ${domain}."
+ uci set gluon.core.domain=${domain} ||:
+ uci commit gluon ||:
+ gluon-reconfigure
+else
+ logger "Domain ${domain} already set."
+fi
