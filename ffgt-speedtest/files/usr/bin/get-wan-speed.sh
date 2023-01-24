@@ -14,5 +14,5 @@ if [ "$wandefaultgw" != "" ]; then
  t1="$(/bin/date +%s)"
  bytes="$(/bin/uclient-fetch -O /dev/null -4 --timeout=60 http://spd-tst.4830.org/100M.dat 2>&1 | awk '/^Download completed/ {bytes=$3; gsub("\(", "", bytes); printf("%d", bytes);}')"
  t2="$(/bin/date +%s)"
- echo ${bytes} ${t1} ${t2} | awk '{dt=$3-$2; if(dt==0) dt=1; printf("<tr><th>wget 100MB</th><td>%.1f MBits/sec</td></tr>\n", ($1*8)/dt/1000000);}' >>/tmp/fbwanspeed.txt
+ echo ${bytes} ${t1} ${t2} | awk '{dt=$3-$2; if(dt==0) dt=1; printf("<tr><th>wget 100MB</th><td>%.1f MBit/sec</td></tr>\n", ($1*8)/dt/1000000);}' >>/tmp/fbwanspeed.txt
 fi
