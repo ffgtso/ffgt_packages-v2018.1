@@ -12,7 +12,7 @@ fi
 
 echo "Migrating FFUE-FW for ${meshname} to Uelzen Unified Firmware ..." | tee -a /tmp/multidomain-migration.log
 
-domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/)
+domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/ -e s/bienenbuettel/xbj/)
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
  echo "No match for mesh ${domain} in /lib/gluon/domains/, setting do default (uez)." | tee -a /tmp/multidomain-migration.log
  domain=uez
