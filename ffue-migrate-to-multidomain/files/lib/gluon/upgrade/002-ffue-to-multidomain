@@ -1,5 +1,10 @@
 #!/bin/sh
 
+if [ "$(uci get autoupdater.stable.mirror | grep ffue >/dev/null ; echo $?)" != "0" ]; then
+ echo "Not an FFUE Firmware!" | tee /tmp/multidomain-migration.log
+ exit 0
+fi
+
 for i in $(uci get autoupdater.stable.mirror)
 do
  meshname=$(echo $i | awk '{gsub("/$", "", $1); gsub("/stable/sysupgrade", "", $1); n=split($1, a, "/"); printf("%s", a[n]);}')
@@ -12,7 +17,7 @@ fi
 
 echo "Migrating FFUE-FW for ${meshname} to Uelzen Unified Firmware ..." | tee -a /tmp/multidomain-migration.log
 
-domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/ -e s/bienenbuettel/xbj/)
+domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/ -e s/bienenbuettel/xbj/ -e s/wendland/luw/)
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
  echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (uez)." | tee -a /tmp/multidomain-migration.log
  domain=uez
