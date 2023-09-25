@@ -1,5 +1,5 @@
 #!/bin/sh
-# This script is supposed to be run every 5 minute via micron.d.
+# This script is supposed to be run every 5 minutes via micron.d.
 #
 # Sent WiFi info once per boot.
 # If is_mobile node, fetch location and fill in geoloc data, DO NOT commit.
