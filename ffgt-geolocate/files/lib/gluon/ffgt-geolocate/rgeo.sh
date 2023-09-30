@@ -1,6 +1,6 @@
 #!/bin/sh
 
-isconfigured="`$(sbin/uci get gluon-setup-mode.@setup_mode[0].configured 2>/dev/null)"
+isconfigured="$(sbin/uci get gluon-setup-mode.@setup_mode[0].configured 2>/dev/null)"
 if [ "$isconfigured" != "1" ]; then
  isconfigured=0
 fi
@@ -38,7 +38,7 @@ if [ "X${curlat}" != "X" -a "X${curlon}" != "X" ]; then
     zip="$(/sbin/uci get gluon-node-info.@location[0].zip 2>/dev/null)"
     if [ $isconfigured -ne 1 ]; then
       if [ "x${zip}" != "x" -a "x${adr}" != "x" ]; then
-       nodeid=`$(echo "util=require 'gluon.util' print(string.format('%s', string.sub(util.node_id(), 9)))" | /usr/bin/lua)
+       nodeid=$(echo "util=require 'gluon.util' print(string.format('%s', string.sub(util.node_id(), 9)))" | /usr/bin/lua)
        suffix=$(echo "util=require 'gluon.util' print(string.format('%s', string.sub(util.node_id(), 9)))" | /usr/bin/lua)
        hostname="${zip}-${adr}-${suffix}"
        #hostname="${zip}-freifunk-${nodeid}"
