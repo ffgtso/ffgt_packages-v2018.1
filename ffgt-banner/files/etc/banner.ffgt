@@ -4,14 +4,16 @@
    _/        _/        _/        _/    _/      _/    _/  _/    _/  _/  _/
   _/        _/          _/_/_/  _/    _/        _/_/_/  _/    _/  _/    _/
 
-   Freifunk-Firmware für den Kreis Gütersloh, Bielefeld, die Müritz-Region
-                     und die Feldberger Seenlandschaft
+  Freifunk-Firmware für die Kreise Gütersloh und Lippe; für Bielefeld und Bad
+  Oeynhausen; für die Landkreise Celle, Gifhorn, Lüneburg, Uelzen und die Alt-
+  mark, die Südheide und das  Wendland; für Neubrandenburg, die Müritz-Region
+  und die Feldberger Seenlandschaft.     Netzbetrieb: https://verein.4830.org
 
-  Info/Kontakt: https://freifunk-kreisgt.de   | https://mueritz.freifunk.net
-                https://freifunk-bielefeld.de | https://freifunk-feldberg.de
+  Karte und Infos zu den einzelnen Communities siehe https://map.4830.org ...
 
   Tools:
-  - autoupdater -f    (Firmware-Update erzwingen)
-  - batctl gwl        (Informationen zu batman-adv-Gateways anzeigen)
-  - batctl o | wc -l  (Anzahl 'orginators' (Knoten) im Netz anzeigen)
-  - batctl tg | wc -l (Anzahl aller Geräte im Netz anzeigen)
+  - autoupdater -f     (Firmware-Update erzwingen)
+  - autoupdater -b tng (Firmware-Update aus dem experimentellen »tng«-Zweig)
+  - batctl gwl         (Informationen zu batman-adv-Gateways anzeigen)
+  - batctl o | wc -l   (Anzahl 'orginators' (Knoten) im Netz anzeigen)
+  - batctl tg | wc -l  (Anzahl aller Geräte im Netz anzeigen)
