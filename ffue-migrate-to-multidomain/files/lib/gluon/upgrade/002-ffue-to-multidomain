@@ -1,7 +1,7 @@
 #!/bin/sh
 
 if [ "$(uci get autoupdater.stable.mirror | grep ffue >/dev/null ; echo $?)" != "0" ]; then
- echo "Not an FFUE Firmware!" | tee /tmp/multidomain-migration.log
+ echo "Not an FFUE Firmware!" | tee -a /tmp/multidomain-migration.log
  exit 0
 fi
 
@@ -11,7 +11,7 @@ do
 done
 
 if [ "${meshname}" = "unified" ]; then
- echo "Welcome to Uelzen Unified Firmware!" | tee /tmp/multidomain-migration.log
+ echo "Welcome to Uelzen Unified Firmware!" | tee -a /tmp/multidomain-migration.log
  exit 0
 fi
 

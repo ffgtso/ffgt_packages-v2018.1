@@ -1,0 +1,26 @@
+#!/bin/sh
+
+if [ "$(uci get autoupdater.stable.mirror | grep helgo/ >/dev/null ; echo $?)" != "0" ]; then
+ echo "Not an Helgoland Firmware!" | tee -a /tmp/multidomain-migration.log
+ exit 0
+fi
+
+echo "Migrating Helgoland-FW to 4830.org e. V. Unified Firmware ..." | tee -a /tmp/multidomain-migration.log
+
+domain="hlg"
+if [ ! -e /lib/gluon/domains/${domain}.json ]; then
+ echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /tmp/multidomain-migration.log
+ domain=zzz
+fi
+
+echo "Selected Domain: ${domain}." | tee -a /tmp/multidomain-migration.log
+
+curdom=$(uci get gluon.core.domain)
+if [ "${curdom}" != "${domain}" ]; then
+ echo "Setting domain: ${domain}." | tee -a /tmp/multidomain-migration.log
+ uci set gluon.core.domain=${domain} ||:
+ uci commit gluon ||:
+ gluon-reconfigure 2>&1 | tee -a /tmp/multidomain-migration.log
+else
+ echo "Domain ${domain} already set." | tee -a /tmp/multidomain-migration.log
+fi
