@@ -1,19 +1,19 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=ffhlg-migrate-to-multidomain
+PKG_NAME:=ffhgl-migrate-to-multidomain
 PKG_VERSION:=2
 PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
 
 include $(TOPDIR)/../package/gluon.mk
 
-define Package/ffhlg-migrate-to-multidomain
-  SECTION:=ffhlg
+define Package/ffhgl-migrate-to-multidomain
+  SECTION:=ffhgl
   CATEGORY:=Customization
   TITLE:=Unify multiple Firmwares into one Multidomain one
   DEPENDS:=+gluon-core +busybox
 endef
 
-define Package/ffhlg-migrate-to-multidomain/description
+define Package/ffhgl-migrate-to-multidomain/description
 	Freifunk Helgoland moves to Multidomain
 endef
 
@@ -27,7 +27,7 @@ endef
 define Build/Compile
 endef
 
-define Package/ffhlg-migrate-to-multidomain/install
+define Package/ffhgl-migrate-to-multidomain/install
 	$(CP) ./files/* $(1)/
 endef
 

@@ -7,7 +7,7 @@ fi
 
 echo "Migrating Helgoland-FW to 4830.org e. V. Unified Firmware ..." | tee -a /tmp/multidomain-migration.log
 
-domain="hlg"
+domain="hgl"
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
  echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /tmp/multidomain-migration.log
  domain=zzz
