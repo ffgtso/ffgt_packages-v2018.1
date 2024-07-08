@@ -1,0 +1,81 @@
+#!/bin/sh
+
+if [ "$(uci get autoupdater.stable.mirror | grep firmware.*4830.org >/dev/null ; echo $?)" = "0" ]; then
+ echo "4830.org FW detected! Move on, nothing to see here!" | tee -a /tmp/multidomain-migration.log
+ exit 0
+fi
+
+hostname=$(pretty-hostname | sed -e 's/"/-/g')
+hostname="$(echo -n "$hostname" | sed -r -e 's/ä/ae/g' -e 's/ö/oe/g' -e 's/ü/ue/g' -e 's/ß/sz/g' -e 's/Ä/Ae/g' -e 's/Ö/Oe/g' -e 's/Ü/Ue/g')"
+hostname="$(echo -n "$hostname" | sed -r -e 's/[^a-zA-Z0-9-]/-/g')"
+hostname="$(echo -n "$hostname" | sed -r -e 's/-+/-/g' -e 's/^-//')"
+hostname="${hostname:0:63}"
+hostname="$(echo -n "$hostname" | sed -e 's/-$//')"
+pretty-hostname "$hostname"
+
+domain="$(uci get gluon.core.domain 2>/dev/null ||:)"
+if [ "X${domain}" = "X" ]; then
+ domain="zzz"
+fi
+
+if [ "$(uci get autoupdater.stable.mirror | grep ffue >/dev/null ; echo $?)" = "0" ]; then
+ for i in $(uci get autoupdater.stable.mirror)
+ do
+  meshname=$(echo $i | awk '{gsub("/$", "", $1); gsub("/stable/sysupgrade", "", $1); n=split($1, a, "/"); printf("%s", a[n]);}')
+ done
+ echo "Migrating FFUE-FW for ${meshname} to 4830.org FW ..." | tee -a /tmp/multidomain-migration.log
+ domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/ -e s/bienenbuettel/xbj/ -e s/wendland/luw/)
+ if [ ! -e /lib/gluon/domains/${domain}.json ]; then
+  echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (uez)." | tee -a /tmp/multidomain-migration.log
+  domain="uez"
+ fi
+fi
+
+if [ "$(uci get autoupdater.stable.mirror | grep helgo/ >/dev/null ; echo $?)" = "0" ]; then
+ echo "Migrating Helgoland-FW to 4830.org FW ..." | tee -a /tmp/multidomain-migration.log
+ domain="hgl"
+fi
+
+if [ "$(uci get autoupdater.stable.mirror | grep freifunk-lippe.de >/dev/null ; echo $?)" = "0" ]; then
+ echo "Migrating FFLIP-FW to 4830.org FW ..." | tee -a /tmp/multidomain-migration.log
+ olddom=$(uci get gluon.core.domain)
+ domain=$(echo ${olddom} | sed -e s/d1/bmg/ -e s/d2/det/ -e s/d3/lem/ -e s/d4/bfn/ -e s/d7/xx7/ -e s/d8/xx8/)
+ if [ ! -e /lib/gluon/domains/${domain}.json ]; then
+  domain="lem"
+ fi
+ lat=$(uci get gluon-node-info.@location[0].latitude 2>/dev/null || echo "0.00")
+ lon=$(uci get gluon-node-info.@location[0].longitude 2>/dev/null || echo "0.00")
+ if [ "$lat" != "0.00" -a "$lon" != "0.00" ]; then
+  if [ ($lat -lt 51.72830 -a $lon -lt 8.33347) ]; then
+   domain="0ar"
+  fi
+ fi
+ if [ "$(echo $hostname | grep "^SPK-PB-DT-HX" >/dev/null ; echo $?)" = "0" ]; then
+  domain="xx8"
+ fi
+ if [ "$(echo $hostname | grep "-krvw$" >/dev/null ; echo $?)" = "0" ]; then
+  domain="xx7"
+ fi
+ echo "Migrating FFLIP-FW, mesh ${olddom}, to 4830.org's ${domain} ..." | tee -a /tmp/multidomain-migration.log
+fi
+
+if [ ! -e /lib/gluon/domains/${domain}.json ]; then
+ echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (001)." | tee -a /tmp/multidomain-migration.log
+ domain=001
+fi
+if [ ! -e /lib/gluon/domains/${domain}.json ]; then
+ echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /tmp/multidomain-migration.log
+ domain=zzz
+fi
+
+echo "Selected Domain: ${domain}." | tee -a /tmp/multidomain-migration.log
+
+curdom=$(uci get gluon.core.domain)
+if [ "${curdom}" != "${domain}" ]; then
+ echo "Setting domain: ${domain}." | tee -a /tmp/multidomain-migration.log
+ uci set gluon.core.domain=${domain} ||:
+ uci commit gluon ||:
+ gluon-reconfigure 2>&1 | tee -a /tmp/multidomain-migration.log
+else
+ echo "Domain ${domain} already set." | tee -a /tmp/multidomain-migration.log
+fi
