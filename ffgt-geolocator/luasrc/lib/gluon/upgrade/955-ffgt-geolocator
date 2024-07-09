@@ -5,7 +5,7 @@ local uci = require('simple-uci').cursor()
 -- Create UCI configuration file if not present
 os.execute("touch /etc/config/ffgt")
 os.execute("touch /lib/gluon/upgrade/955-ffda-geolocator")
-os.execute("/lib/gluon/upgrade/955-ffda-geolocator")
+os.execute("rm /lib/gluon/upgrade/955-ffda-geolocator")
 
 -- Create UCI section
 if uci:get("ffgt", "geolocator", "enabled") == nil then
