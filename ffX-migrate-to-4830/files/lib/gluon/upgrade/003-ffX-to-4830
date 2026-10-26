@@ -18,7 +18,24 @@ if [ "X${domain}" = "X" ]; then
  domain="zzz"
 fi
 
+WHO=""
+
+if [ "$(uci get autoupdater.stable.mirror | grep ffdo >/dev/null ; echo $?)" = "0" ]; then
+ WHO="FFDO"
+ for i in $(uci get autoupdater.stable.mirror)
+ do
+  meshname=$(echo $i | awk '{gsub("/$", "", $1); gsub("/stable/images/sysupgrade", "", $1); n=split($1, a, "/"); printf("%s", a[n]);}')
+ done
+ domain=$(echo ${meshname} | sed -e s/domaene/ffdo_d/)
+ echo "Migrating FFDO-FW for ${meshname} to FFDO multdomain FW's ${domain} ..." | tee -a /tmp/multidomain-migration.log
+ if [ ! -e /lib/gluon/domains/${domain}.json ]; then
+  echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (ffdo_d01)." | tee -a /tmp/multidomain-migration.log
+  domain="ffdo_d01"
+ fi
+fi
+
 if [ "$(uci get autoupdater.stable.mirror | grep ffue >/dev/null ; echo $?)" = "0" ]; then
+ WHO="FFUE"
  for i in $(uci get autoupdater.stable.mirror)
  do
   meshname=$(echo $i | awk '{gsub("/$", "", $1); gsub("/stable/sysupgrade", "", $1); n=split($1, a, "/"); printf("%s", a[n]);}')
@@ -31,12 +48,8 @@ if [ "$(uci get autoupdater.stable.mirror | grep ffue >/dev/null ; echo $?)" = "
  fi
 fi
 
-if [ "$(uci get autoupdater.stable.mirror | grep helgo/ >/dev/null ; echo $?)" = "0" ]; then
- echo "Migrating Helgoland-FW to 4830.org FW ..." | tee -a /tmp/multidomain-migration.log
- domain="hgl"
-fi
-
 if [ "$(uci get autoupdater.stable.mirror | grep freifunk-lippe.de >/dev/null ; echo $?)" = "0" ]; then
+ WHO="FFLIP"
  echo "Migrating FFLIP-FW to 4830.org FW ..." | tee -a /tmp/multidomain-migration.log
  olddom=$(uci get gluon.core.domain)
  domain=$(echo ${olddom} | sed -e s/d1/bmg/ -e s/d2/det/ -e s/d3/lem/ -e s/d4/bfn/ -e s/d7/xx7/ -e s/d8/xx8/)
@@ -60,11 +73,11 @@ if [ "$(uci get autoupdater.stable.mirror | grep freifunk-lippe.de >/dev/null ; 
 fi
 
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
- echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (001)." | tee -a /tmp/multidomain-migration.log
- domain=001
+ echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to FFDO default (ffdo_d01)." | tee -a /tmp/multidomain-migration.log
+ domain=ffdo_d01
 fi
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
- echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /tmp/multidomain-migration.log
+ echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to 4830 default (zzz)." | tee -a /tmp/multidomain-migration.log
  domain=zzz
 fi
 

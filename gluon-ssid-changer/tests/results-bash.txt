@@ -1,0 +1,27 @@
+test_both_radios_updated_before_single_reload (__main__.ChangerTests.test_both_radios_updated_before_single_reload) ... ok
+test_client_is_secondary_bss (__main__.ChangerTests.test_client_is_secondary_bss) ... ok
+test_empty_table (__main__.ChangerTests.test_empty_table) ... ok
+test_empty_uci_map (__main__.ChangerTests.test_empty_uci_map) ... ok
+test_failed_hup_retried_inside_hysteresis (__main__.ChangerTests.test_failed_hup_retried_inside_hysteresis) ... ok
+test_first_radio_correct_second_offline (__main__.ChangerTests.test_first_radio_correct_second_offline) ... ok
+test_gateway_command_failure (__main__.ChangerTests.test_gateway_command_failure) ... ok
+test_hysteresis_including_boundaries (__main__.ChangerTests.test_hysteresis_including_boundaries) ... ok
+test_idempotent (__main__.ChangerTests.test_idempotent) ... ok
+test_invalid_gateway_values (__main__.ChangerTests.test_invalid_gateway_values) ... ok
+test_invalid_online_ssid (__main__.ChangerTests.test_invalid_online_ssid) ... ok
+test_lock_blocks_second_instance (__main__.ChangerTests.test_lock_blocks_second_instance) ... ok
+test_long_hostname_limit (__main__.ChangerTests.test_long_hostname_limit) ... ok
+test_missing_uci_ssid_does_not_invent_freifunk (__main__.ChangerTests.test_missing_uci_ssid_does_not_invent_freifunk) ... ok
+test_no_hostapd_files (__main__.ChangerTests.test_no_hostapd_files) ... ok
+test_no_selected_gateway (__main__.ChangerTests.test_no_selected_gateway) ... ok
+test_private_bss_same_ssid_untouched (__main__.ChangerTests.test_private_bss_same_ssid_untouched) ... ok
+test_second_correct_does_not_cancel_reload (__main__.ChangerTests.test_second_correct_does_not_cancel_reload) ... ok
+test_special_characters_are_literal (__main__.ChangerTests.test_special_characters_are_literal) ... ok
+test_ssid2_supported (__main__.ChangerTests.test_ssid2_supported) ... ok
+test_uci_failure (__main__.ChangerTests.test_uci_failure) ... ok
+test_upper_boundary_plus_one (__main__.ChangerTests.test_upper_boundary_plus_one) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 6.406s
+
+OK

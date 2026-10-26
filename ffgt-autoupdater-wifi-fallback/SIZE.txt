@@ -1,0 +1,4 @@
+Runtime source/config/hook bytes before LuaSrcDiet: 13103
+Gzip size of concatenated runtime files (illustrative only): 4549
+These are NOT installed IPK/SquashFS/image sizes. No full firmware build was performed.
+README, tests, license and manifests are not installed by the package Makefile.

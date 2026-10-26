@@ -1,0 +1,48 @@
+#!/usr/bin/lua
+local runtime = require 'ffgt-wifi-fallback.runtime'
+local core = require 'ffgt-wifi-fallback.core'
+local util = require 'gluon.util'
+local uci = runtime.uci
+local config = 'autoupdater-wifi-fallback'
+local timer = '/tmp/ffgt-wifi-fallback.unreachable'
+local force, branch = false, uci:get('autoupdater', 'settings', 'branch')
+local i = 1
+while arg[i] do
+	if arg[i] == '-f' then
+		force = true
+	elseif arg[i] == '-b' and arg[i + 1] then
+		i = i + 1
+		branch = arg[i]
+	else
+		io.stderr:write('Usage: autoupdater-wifi-fallback [-f] [-b branch]\n')
+		os.exit(1)
+	end
+	i = i + 1
+end
+if not branch or not uci:get('autoupdater', branch) then
+	runtime.log('Missing autoupdater branch configuration')
+	os.exit(1)
+end
+local lock = runtime.lock()
+if not lock then os.exit(0) end
+runtime.install_signals()
+if runtime.upgrading() then os.exit(0) end
+if not force then
+	if not uci:get_bool(config, 'settings', 'enabled')
+		or not uci:get_bool('autoupdater', 'settings', 'enabled') then os.exit(0) end
+	local now = runtime.uptime()
+	if now < 3600 then os.exit(0) end
+	if runtime.mesh_reachable() then os.remove(timer); os.exit(0) end
+	local since = tonumber(util.readfile(timer) or '')
+	if not since or since > now then
+		local f = assert(io.open(timer, 'w'))
+		f:write(tostring(now)); f:close()
+		os.exit(0)
+	end
+	if now - since < 7200 then os.exit(0) end
+end
+-- Scanning runs before WiFi teardown; unsupported devices are skipped.
+local ok, candidates = pcall(runtime.scan)
+if not ok then runtime.log(tostring(candidates)); os.exit(1) end
+runtime.log('Open Freifunk candidates: ' .. #candidates)
+os.exit(core.round(runtime, candidates, branch) and 0 or 1)

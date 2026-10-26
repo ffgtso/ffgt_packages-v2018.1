@@ -1,0 +1,41 @@
+PASS SSID case and surrounding text
+PASS Open APs only
+PASS Malformed SSID or BSSID rejected
+PASS SSID punctuation accepted as data
+PASS IPv6 address route and DNS required
+PASS Link-local insufficient; ULA accepted
+PASS Every BSSID tried even after exit zero
+PASS Connection failure skips updater
+PASS No IPv6 skips updater
+PASS Exception restores WiFi
+PASS Failed down still restores WiFi
+PASS Cleanup exception does not prevent wifi up
+PASS No candidates leaves WiFi untouched
+PASS Cancellation restores without another candidate
+PASS Upgrade handoff prevents next AP and network cleanup
+PASS Already started upgrade prevents WiFi teardown
+PASS Native exec receives literal argv, without shell
+PASS Bounded command killed and reaped
+PASS Updater command uses blocking wait without timeout
+PASS Native exec failure reported
+PASS Exclusive lock and close-on-exec set
+PASS Scan skips bad radio and deduplicates per PHY/BSSID
+PASS Connection passes SSID and BSSID separately without -w
+PASS Wrong BSSID never starts IPv6
+PASS IPv6 readiness polls own logical interface
+PASS IPv6 deadline prevents endless wait
+PASS WiFi teardown waits for interfaces to disappear
+PASS Updater preserves branch argument and no outer timeout
+PASS Gateway ping uses validated MAC and finite timeout
+PASS Upgrade preserves disabled setting and configures IPv6 firewall
+PASS Cleanup stops IPv6 before deleting temporary station
+PASS Incomplete network teardown is reported as failure
+PASS Disabled updater does not start fallback
+PASS Boot grace period
+PASS First outage starts uptime timer only
+PASS Recovery delay then candidate round
+PASS Reachable mesh clears timer
+PASS Force bypasses uptime mesh and enabled checks
+PASS Missing branch fails before touching WLAN
+PASS Second instance exits without touching WLAN
+40 tests passed (Lua 5.1)

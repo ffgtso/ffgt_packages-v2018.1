@@ -1,0 +1,2 @@
+#!/bin/sh
+rm /tmp/ffgt-wifi-fallback.upgrading 2>/dev/null || :

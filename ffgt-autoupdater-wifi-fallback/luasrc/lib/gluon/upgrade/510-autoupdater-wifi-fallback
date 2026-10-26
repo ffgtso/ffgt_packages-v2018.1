@@ -1,0 +1,49 @@
+#!/usr/bin/lua
+local uci = require('simple-uci').cursor()
+local util = require 'gluon.util'
+local name = 'autoupdater-wifi-fallback'
+if not uci:get(name, 'settings') then
+	uci:section(name, name, 'settings', {
+		enabled = uci:get_bool('autoupdater', 'settings', 'enabled'),
+	})
+end
+-- Remove stale runtime options from the predecessor, preserve enabled state.
+uci:delete(name, 'settings', 'unreachable_since')
+uci:delete(name, 'settings', 'last_run')
+uci:delete('wireless', 'fallback')
+uci:delete('network', 'fallback')
+uci:delete('network', 'fallback6')
+for _, section in ipairs({'fallback', 'fallback_ICMPv4_in', 'fallback_ICMPv6_in', 'fallback_ssh'}) do
+	uci:delete('firewall', section)
+end
+uci:delete('network', 'ffgt_fallback6')
+uci:section('network', 'interface', 'ffgt_fallback6', {
+	ifname = 'ffgtfallback', proto = 'dhcpv6', auto = false,
+	reqaddress = 'try', reqprefix = 'no', delegate = false,
+	peerdns = true, sourcefilter = false, metric = 1,
+})
+uci:delete('firewall', 'ffgt_fallback')
+uci:section('firewall', 'zone', 'ffgt_fallback', {
+	name = 'ffgtfb', network = {'ffgt_fallback6'}, device = {'ffgtfallback'},
+	input = 'REJECT', output = 'ACCEPT', forward = 'REJECT',
+})
+uci:delete('firewall', 'ffgt_fallback_icmp6')
+uci:section('firewall', 'rule', 'ffgt_fallback_icmp6', {
+	name = 'ffgt-fallback-ICMPv6', src = 'ffgtfb',
+	proto = 'icmp', family = 'ipv6', target = 'ACCEPT',
+	icmp_type = {'destination-unreachable', 'packet-too-big', 'time-exceeded',
+		'bad-header', 'unknown-header-type', 'router-solicitation', 'router-advertisement',
+		'neighbour-solicitation', 'neighbour-advertisement', 'echo-request', 'echo-reply',
+		'130/0', '131/0', '132/0', '143/0'},
+})
+uci:delete('firewall', 'ffgt_fallback_dhcp6')
+uci:section('firewall', 'rule', 'ffgt_fallback_dhcp6', {
+	name = 'ffgt-fallback-DHCPv6', src = 'ffgtfb',
+	proto = 'udp', src_port = '547', dest_port = '546', family = 'ipv6', target = 'ACCEPT',
+})
+for _, file in ipairs({name, 'wireless', 'network', 'firewall'}) do uci:save(file) end
+local schedule = util.readfile('/usr/lib/micron.d/autoupdater') or ''
+local minute = tonumber(schedule:match('^(%d+)%s')) or 0
+local f = assert(io.open('/usr/lib/micron.d/autoupdater-wifi-fallback', 'w'))
+f:write(string.format('%d * * * * /usr/sbin/autoupdater-wifi-fallback\n', (minute + 10) % 60))
+f:close()
