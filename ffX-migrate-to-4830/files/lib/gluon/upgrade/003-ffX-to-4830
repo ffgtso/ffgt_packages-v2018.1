@@ -1,7 +1,7 @@
 #!/bin/sh
 
 if [ "$(uci get autoupdater.stable.mirror | grep firmware.*4830.org >/dev/null ; echo $?)" = "0" ]; then
- echo "4830.org FW detected! Move on, nothing to see here!" | tee -a /tmp/multidomain-migration.log
+ echo "4830.org FW detected! Move on, nothing to see here!" | tee -a /root/multidomain-migration.log
  exit 0
 fi
 
@@ -31,16 +31,16 @@ if [ "$(uci get autoupdater.stable.mirror | grep ffdo >/dev/null ; echo $?)" = "
  # Build for FFDO or 4830?
  if [ -e /lib/gluon/domains/ffdo_d01.json ]; then
   domain=$(echo ${meshname} | sed -e s/domaene/ffdo_d/)
-  echo "Migrating FFDO-FW for ${meshname} to FFDO multdomain FW's ${domain} ..." | tee -a /tmp/multidomain-migration.log
+  echo "Migrating FFDO-FW for ${meshname} to FFDO multdomain FW's ${domain} ..." | tee -a /root/multidomain-migration.log
   if [ ! -e /lib/gluon/domains/${domain}.json ]; then
-   echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (ffdo_d01)." | tee -a /tmp/multidomain-migration.log
+   echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (ffdo_d01)." | tee -a /root/multidomain-migration.log
    domain="ffdo_d01"
   fi
  else
   domain=$(echo ${meshname} | sed -e s/domaene/d/ | sed -e s/d01/dt0/ -e s/d02/dtm/ -e s/d03/dtm/ -e s/d04/dtm/ -e s/d05/dtm/ -e s/d06/dtm/ -e s/d07/wre/ -e s/d08/lue/ -e s/d09/kmn/ -e s/d10/unn/ -e s/d11//hze)
-  echo "Migrating FFDO-FW for ${meshname} to 4830's ${domain} ..." | tee -a /tmp/multidomain-migration.log
+  echo "Migrating FFDO-FW for ${meshname} to 4830's ${domain} ..." | tee -a /root/multidomain-migration.log
   if [ ! -e /lib/gluon/domains/${domain}.json ]; then
-   echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /tmp/multidomain-migration.log
+   echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /root/multidomain-migration.log
    domain="zzz"
   fi
   # FFDO's beta branch is 4830's testing
@@ -48,7 +48,7 @@ if [ "$(uci get autoupdater.stable.mirror | grep ffdo >/dev/null ; echo $?)" = "
   if [ "${branch}" = "beta" ]; then
    uci set autoupdater.settings.branch='testing'
    uci commit autoupdater
-   echo "Migrated FFDO's autoupdate branch 'beta' to 4830's 'testing'." | tee -a /tmp/multidomain-migration.log
+   echo "Migrated FFDO's autoupdate branch 'beta' to 4830's 'testing'." | tee -a /root/multidomain-migration.log
   fi
  fi
 fi
@@ -59,17 +59,17 @@ if [ "$(uci get autoupdater.stable.mirror | grep ffue >/dev/null ; echo $?)" = "
  do
   meshname=$(echo $i | awk '{gsub("/$", "", $1); gsub("/stable/sysupgrade", "", $1); n=split($1, a, "/"); printf("%s", a[n]);}')
  done
- echo "Migrating FFUE-FW for ${meshname} to 4830.org FW ..." | tee -a /tmp/multidomain-migration.log
+ echo "Migrating FFUE-FW for ${meshname} to 4830.org FW ..." | tee -a /root/multidomain-migration.log
  domain=$(echo ${meshname} | sed -e s/uelzen/uel/ -e s/celle/cel/ -e s/gifhorn/gif/ -e s/bienenbuettel/xbj/ -e s/wendland/luw/)
  if [ ! -e /lib/gluon/domains/${domain}.json ]; then
-  echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (uez)." | tee -a /tmp/multidomain-migration.log
+  echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (uez)." | tee -a /root/multidomain-migration.log
   domain="uez"
  fi
 fi
 
 if [ "$(uci get autoupdater.stable.mirror | grep freifunk-lippe.de >/dev/null ; echo $?)" = "0" ]; then
  WHO="FFLIP"
- echo "Migrating FFLIP-FW to 4830.org FW ..." | tee -a /tmp/multidomain-migration.log
+ echo "Migrating FFLIP-FW to 4830.org FW ..." | tee -a /root/multidomain-migration.log
  olddom=$(uci get gluon.core.domain)
  domain=$(echo ${olddom} | sed -e s/d1/bmg/ -e s/d2/det/ -e s/d3/lem/ -e s/d4/bfn/ -e s/d7/xx7/ -e s/d8/xx8/)
  if [ ! -e /lib/gluon/domains/${domain}.json ]; then
@@ -88,15 +88,15 @@ if [ "$(uci get autoupdater.stable.mirror | grep freifunk-lippe.de >/dev/null ; 
  if [ "$(echo $hostname | grep "-krvw$" >/dev/null ; echo $?)" = "0" ]; then
   domain="xx7"
  fi
- echo "Migrating FFLIP-FW, mesh ${olddom}, to 4830.org's ${domain} ..." | tee -a /tmp/multidomain-migration.log
+ echo "Migrating FFLIP-FW, mesh ${olddom}, to 4830.org's ${domain} ..." | tee -a /root/multidomain-migration.log
 fi
 
 if [ ! -e /lib/gluon/domains/${domain}.json ]; then
- echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to 4830 default (zzz)." | tee -a /tmp/multidomain-migration.log
+ echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to 4830 default (zzz)." | tee -a /root/multidomain-migration.log
  domain=zzz
 fi
 
-echo "Former ${WHO} firmware adjusted, selected domain: ${domain}." | tee -a /tmp/multidomain-migration.log
+echo "Former ${WHO} firmware adjusted, selected domain: ${domain}." | tee -a /root/multidomain-migration.log
 
 curdom=$(uci get gluon.core.domain)
 if [ "${curdom}" != "${domain}" ]; then
@@ -105,7 +105,7 @@ if [ "${curdom}" != "${domain}" ]; then
  uci commit gluon ||:
  uci set gluon-node-info.@location[0].locode="${domain}" ||:
  uci commit gluon-node-info ||:
- gluon-reconfigure 2>&1 | tee -a /tmp/multidomain-migration.log
+ gluon-reconfigure 2>&1 | tee -a /root/multidomain-migration.log
 else
- echo "Domain ${domain} already set." | tee -a /tmp/multidomain-migration.log
+ echo "Domain ${domain} already set." | tee -a /root/multidomain-migration.log
 fi
