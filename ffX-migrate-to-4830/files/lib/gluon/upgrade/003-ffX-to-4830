@@ -47,9 +47,11 @@ if [ "$(uci get autoupdater.stable.mirror | grep ffdo >/dev/null ; echo $?)" = "
   branch="$(uci get autoupdater.settings.branch)"
   if [ "${branch}" = "beta" ]; then
    uci set autoupdater.settings.branch='testing'
-   uci commit autoupdater
+   # uci commit autoupdater
    echo "Migrated FFDO's autoupdate branch 'beta' to 4830's 'testing'." | tee -a /root/multidomain-migration.log
   fi
+  uci delete autoupdater.beta ||:
+  uci commit autoupdater
  fi
 fi
 
@@ -98,13 +100,15 @@ fi
 
 echo "Former ${WHO} firmware adjusted, selected domain: ${domain}." | tee -a /root/multidomain-migration.log
 
+uci set gluon-node-info.@location[0].locode="${domain}" ||:
+uci commit gluon-node-info ||:
+
+
 curdom=$(uci get gluon.core.domain)
 if [ "${curdom}" != "${domain}" ]; then
  echo "Setting domain: ${domain}." | tee -a /root/multidomain-migration.log
  uci set gluon.core.domain="${domain}" ||:
  uci commit gluon ||:
- uci set gluon-node-info.@location[0].locode="${domain}" ||:
- uci commit gluon-node-info ||:
  gluon-reconfigure 2>&1 | tee -a /root/multidomain-migration.log
 else
  echo "Domain ${domain} already set." | tee -a /root/multidomain-migration.log
