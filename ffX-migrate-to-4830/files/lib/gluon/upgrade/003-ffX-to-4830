@@ -37,7 +37,7 @@ if [ "$(uci get autoupdater.stable.mirror | grep ffdo >/dev/null ; echo $?)" = "
    domain="ffdo_d01"
   fi
  else
-  domain=$(echo ${meshname} | sed -e s/domaene/d/ | sed -e s/d01/dt0/ -e s/d02/dtm/ -e s/d03/dtm/ -e s/d04/dtm/ -e s/d05/dtm/ -e s/d06/dtm/ -e s/d07/wre/ -e s/d08/lue/ -e s/d09/kmn/ -e s/d10/unn/ -e s/d11//hze)
+  domain=$(echo ${meshname} | sed -e s/domaene/d/ | sed -e s/d01/dt0/ -e s/d02/dtm/ -e s/d03/dtm/ -e s/d04/dtm/ -e s/d05/dtm/ -e s/d06/dtm/ -e s/d07/wre/ -e s/d08/lue/ -e s/d09/kmn/ -e s/d10/unn/ -e s/d11/hze/)
   echo "Migrating FFDO-FW for ${meshname} to 4830's ${domain} ..." | tee -a /root/multidomain-migration.log
   if [ ! -e /lib/gluon/domains/${domain}.json ]; then
    echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /root/multidomain-migration.log
