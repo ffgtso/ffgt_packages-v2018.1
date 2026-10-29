@@ -1,19 +1,59 @@
 #!/bin/sh
 
+LOCKFILE="/tmp/ffX-to-4830.lck"
+
+echo "$0 start." | tee -a /root/multidomain-migration.log
+
+is_configured="$(uci get gluon-setup-mode.@setup_mode[0].configured 2>/dev/null || echo 0)"
+if [ "${is_configured}" != "1" ]; then
+ echo "Skipping run on unconfigured node!" | tee -a /root/multidomain-migration.log
+ logger "Skipping run on unconfigured node!"
+ exit 0
+fi
+
+if [ -e ${LOCKFILE} ]; then
+ echo "$0 already running, skipping ..." | tee -a /root/multidomain-migration.log
+ exit 0
+else
+ touch ${LOCKFILE}
+fi
+
+mac="$(echo -e "local util = require 'gluon.util'\nlocal mac=string.sub(util.node_id(), 9);\nprint(mac);" | /usr/bin/lua)"
+if [ "${mac}X" = "X" ]; then
+ mac="0mac"
+fi
+
+hostname="$(pretty-hostname | sed -e 's/"/-/g')"
+hostname="$(echo -n "${hostname}" | awk '{h=$0; gsub(/\xE4/, "ae", h); gsub(/\xF6/, "oe", h); gsub(/\xFC/, "ue", h); gsub(/\xDF/, "sz", h); gsub(/\xC4/, "Ae", h); gsub(/\xD6/, "Oe", h); gsub(/\xDC/, "Ue", h); print h;}')"
+hostname="$(echo -n "${hostname}" | awk '{h=$0; gsub(/\xC3\xA4/, "ae", h); gsub(/\xC3\xB6/, "oe", h); gsub(/\xC3\xBC/, "ue", h); gsub(/\xC3\x9F/, "sz", h); gsub(/\xC3\x84/, "Ae", h); gsub(/\xC3\x96/, "Oe", h); gsub(/\xC3\x9C/, "Ue", h); print h;}')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/e\. V\./eV/g' -e 's/e\.V\./eV/g')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/[^a-zA-Z0-9-]/-/g')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/-+/-/g' -e 's/^-//')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/Evangelisch-reformierte/Ev-ref/g')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/Dorfgemeinschaftshaus/DGH/g')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/^ff-anroechte//g')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/^fflip-Moehne/Moehne/gi')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/strasze/str/g' -e 's/strasse/str/g')"
+hostname="$(echo -n "${hostname}" | sed -r -e 's/Strasze/Str/g' -e 's/Strasse/Str/g')"
+hostname="$(echo -n "${hostname}" | sed -e 's/-$//' -e 's/^-//')"
+len="$(echo -n "{$hostname}"|wc -c)"
+if [ ${len} -gt 42 ]; then
+ hostname="${hostname:0:37}-${mac}"
+fi
+#hostname="${hostname:0:42}"
+if [ "$(pretty-hostname)" != "${hostname}" ]; then
+ if [ "X${hostname}" = "X" ]; then
+  hostname="unparsable-hostname-${mac}"
+ fi
+ logger "Changed hostname from $(pretty-hostname) to ${hostname}."
+ echo "Changed hostname from $(pretty-hostname) to ${hostname}." | tee -a /root/multidomain-migration.log
+ pretty-hostname "${hostname}"
+fi
+
 if [ "$(uci get autoupdater.stable.mirror | grep firmware.*4830.org >/dev/null ; echo $?)" = "0" ]; then
  echo "4830.org FW detected! Move on, nothing to see here!" | tee -a /root/multidomain-migration.log
  exit 0
 fi
-
-hostname=$(pretty-hostname | sed -e 's/"/-/g')
-hostname="$(echo -n "$hostname" | sed -r -e 's/ä/ae/g' -e 's/ö/oe/g' -e 's/ü/ue/g' -e 's/ß/sz/g' -e 's/Ä/Ae/g' -e 's/Ö/Oe/g' -e 's/Ü/Ue/g')"
-hostname="$(echo -n "${hostname}" | awk '{h=$0; gsub(/\xE4/, "ae", h); gsub(/\xF6/, "oe", h); gsub(/\xFC/, "ue", h); gsub(/\xDF/, "sz", h); gsub(/\xC4/, "Ae", h); gsub(/\xD6/, "Oe", h); gsub(/\xDC/, "Ue", h); print h;}')"
-hostname="$(echo -n "${hostname}" | awk '{h=$0; gsub(/\xC3\xA4/, "ae", h); gsub(/\xC3\xB6/, "oe", h); gsub(/\xC3\xBC/, "ue", h); gsub(/\xC3\x9F/, "sz", h); gsub(/\xC3\x84/, "Ae", h); gsub(/\xC3\x96/, "Oe", h); gsub(/\xC3\x9C/, "Ue", h); print h;}')"
-hostname="$(echo -n "$hostname" | sed -r -e 's/[^a-zA-Z0-9-]/-/g')"
-hostname="$(echo -n "$hostname" | sed -r -e 's/-+/-/g' -e 's/^-//')"
-hostname="${hostname:0:63}"
-hostname="$(echo -n "$hostname" | sed -e 's/-$//')"
-pretty-hostname "$hostname"
 
 domain="$(uci get gluon.core.domain 2>/dev/null ||:)"
 if [ "X${domain}" = "X" ]; then
@@ -37,7 +77,7 @@ if [ "$(uci get autoupdater.stable.mirror | grep ffdo >/dev/null ; echo $?)" = "
    domain="ffdo_d01"
   fi
  else
-  domain=$(echo ${meshname} | sed -e s/domaene/d/ | sed -e s/d01/dt0/ -e s/d02/dtm/ -e s/d03/dtm/ -e s/d04/dtm/ -e s/d05/dtm/ -e s/d06/dtm/ -e s/d07/wre/ -e s/d08/lue/ -e s/d09/kmn/ -e s/d10/unn/ -e s/d11/hze/)
+  domain=$(echo ${meshname} | sed -e s/domaene/d/ | sed -e s/d01/yz0/ -e s/d02/yz1/ -e s/d03/dtm/ -e s/d04/dt0/ -e s/d05/yz2/ -e s/d06/yz3/ -e s/d07/wre/ -e s/d08/lue/ -e s/d09/kmn/ -e s/d10/unn/ -e s/d11/hze/)
   echo "Migrating FFDO-FW for ${meshname} to 4830's ${domain} ..." | tee -a /root/multidomain-migration.log
   if [ ! -e /lib/gluon/domains/${domain}.json ]; then
    echo "No match for mesh ${domain} in /lib/gluon/domains/, setting to default (zzz)." | tee -a /root/multidomain-migration.log
@@ -103,6 +143,12 @@ echo "Former ${WHO} firmware adjusted, selected domain: ${domain}." | tee -a /ro
 uci set gluon-node-info.@location[0].locode="${domain}" ||:
 uci commit gluon-node-info ||:
 
+lat=$(uci get gluon-node-info.@location[0].latitude 2>/dev/null || echo "0.00")
+lon=$(uci get gluon-node-info.@location[0].longitude 2>/dev/null || echo "0.00")
+if [ "${lat}" = "0.00" -o "${lon}" = "0.00" ]; then
+ echo "Started WiFi-based location gathering in the backgroud due to missing coordinates." | tee -a /root/multidomain-migration.log
+ ((sleep 150 ; /lib/gluon/ffgt-geolocate/geolocate-lite.sh force ; echo >>/root/multidomain-migration.log "Geolocation results:" ; cat /tmp/geoloc.out >>/root/multidomain-migration.log) &)
+fi
 
 curdom=$(uci get gluon.core.domain)
 if [ "${curdom}" != "${domain}" ]; then
@@ -113,3 +159,5 @@ if [ "${curdom}" != "${domain}" ]; then
 else
  echo "Domain ${domain} already set." | tee -a /root/multidomain-migration.log
 fi
+
+rm ${LOCKFILE}
