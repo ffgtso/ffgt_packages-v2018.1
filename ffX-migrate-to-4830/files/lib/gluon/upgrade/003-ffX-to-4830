@@ -14,7 +14,6 @@ fi
 
 if [ -e ${LOCKFILE} ]; then
  echo "$0 already running, skipping ..." | tee -a /root/multidomain-migration.log
- rm ${LOCKFILE}
  echo "$0 end." | tee -a /root/multidomain-migration.log
  exit 0
 else
