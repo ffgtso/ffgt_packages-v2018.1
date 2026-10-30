@@ -161,3 +161,4 @@ else
 fi
 
 rm ${LOCKFILE}
+echo "$0 end." | tee -a /root/multidomain-migration.log
