@@ -8,11 +8,14 @@ is_configured="$(uci get gluon-setup-mode.@setup_mode[0].configured 2>/dev/null 
 if [ "${is_configured}" != "1" ]; then
  echo "Skipping run on unconfigured node!" | tee -a /root/multidomain-migration.log
  logger "Skipping run on unconfigured node!"
+ echo "$0 end." | tee -a /root/multidomain-migration.log
  exit 0
 fi
 
 if [ -e ${LOCKFILE} ]; then
  echo "$0 already running, skipping ..." | tee -a /root/multidomain-migration.log
+ rm ${LOCKFILE}
+ echo "$0 end." | tee -a /root/multidomain-migration.log
  exit 0
 else
  touch ${LOCKFILE}
@@ -36,7 +39,7 @@ hostname="$(echo -n "${hostname}" | sed -r -e 's/^fflip-Moehne/Moehne/gi')"
 hostname="$(echo -n "${hostname}" | sed -r -e 's/strasze/str/g' -e 's/strasse/str/g')"
 hostname="$(echo -n "${hostname}" | sed -r -e 's/Strasze/Str/g' -e 's/Strasse/Str/g')"
 hostname="$(echo -n "${hostname}" | sed -e 's/-$//' -e 's/^-//')"
-len="$(echo -n "{$hostname}"|wc -c)"
+len=${#hostname}
 if [ ${len} -gt 42 ]; then
  hostname="${hostname:0:37}-${mac}"
 fi
@@ -52,6 +55,8 @@ fi
 
 if [ "$(uci get autoupdater.stable.mirror | grep firmware.*4830.org >/dev/null ; echo $?)" = "0" ]; then
  echo "4830.org FW detected! Move on, nothing to see here!" | tee -a /root/multidomain-migration.log
+ rm ${LOCKFILE}
+ echo "$0 end." | tee -a /root/multidomain-migration.log
  exit 0
 fi
 
@@ -117,17 +122,10 @@ if [ "$(uci get autoupdater.stable.mirror | grep freifunk-lippe.de >/dev/null ; 
  if [ ! -e /lib/gluon/domains/${domain}.json ]; then
   domain="lem"
  fi
- lat=$(uci get gluon-node-info.@location[0].latitude 2>/dev/null || echo "0.00")
- lon=$(uci get gluon-node-info.@location[0].longitude 2>/dev/null || echo "0.00")
- if [ "$lat" != "0.00" -a "$lon" != "0.00" ]; then
-  if [ ($lat -lt 51.72830 -a $lon -lt 8.33347) ]; then
-   domain="0ar"
-  fi
- fi
  if [ "$(echo $hostname | grep "^SPK-PB-DT-HX" >/dev/null ; echo $?)" = "0" ]; then
   domain="xx8"
  fi
- if [ "$(echo $hostname | grep "-krvw$" >/dev/null ; echo $?)" = "0" ]; then
+ if [ "$(echo $hostname | grep -q -e '-krvw$' >/dev/null ; echo $?)" = "0" ]; then
   domain="xx7"
  fi
  echo "Migrating FFLIP-FW, mesh ${olddom}, to 4830.org's ${domain} ..." | tee -a /root/multidomain-migration.log
@@ -162,3 +160,4 @@ fi
 
 rm ${LOCKFILE}
 echo "$0 end." | tee -a /root/multidomain-migration.log
+exit 0
