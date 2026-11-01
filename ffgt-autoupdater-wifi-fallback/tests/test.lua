@@ -108,6 +108,7 @@ end)
 
 -- Production platform code with fake OpenWrt APIs; never executes router commands.
 local uci, files = {}, {}
+local phys = {}
 local unistd = {sleep = function() end, close = function() end, SEEK_SET = 0}
 local fcntl = {O_WRONLY = 1, O_CREAT = 2, O_TRUNC = 4, F_SETLK = 6, F_WRLCK = 1,
 	F_SETFD = 2, FD_CLOEXEC = 1, open = function() return 9 end, fcntl = function() return 0 end}
@@ -115,7 +116,8 @@ local pwait, psignal = {WNOHANG = 1}, {SIGKILL = 9, SIGTERM = 15, SIGINT = 2, SI
 local iwinfo = {}
 package.loaded['simple-uci'] = {cursor = function() return uci end}
 package.loaded['gluon.util'] = {readfile = function(p) return files[p] end,
-	find_phy = function(r) return r.phy end}
+	find_phy = function(r) return r.phy end,
+	glob = function(pattern) assert(pattern == '/sys/class/ieee80211/*'); return phys end}
 package.loaded.iwinfo = iwinfo
 package.loaded.jsonc = {parse = function(s) return s == 'down' and {up = false, pending = false} or ready() end}
 package.loaded['posix.unistd'] = unistd
@@ -231,15 +233,23 @@ test('Gateway presence prevents fallback without ping', function()
 	r.command = function() return 1, '' end
 	assert(r.has_gateways() == nil)
 end)
-test('No radio differs from disabled radio', function()
-	r.command = function() return 0, '' end
+test('Ethernet-only node does not invoke iw without nl80211', function()
+	phys = {}
+	r.command = function() error('iw must not be called without a PHY') end
 	assert(r.wifi_state() == 'absent')
-	r.command = function(argv) return 0, argv[2] == 'phy' and 'Wiphy phy0' or 'phy#0' end
+end)
+test('Disabled radio differs from an iw failure with hardware present', function()
+	phys = {'/sys/class/ieee80211/phy0'}
+	r.command = function(argv)
+		assert(argv[1] == 'iw' and argv[2] == 'dev')
+		return 0, 'phy#0'
+	end
 	assert(r.wifi_state() == 'inactive')
 	r.command = function() return 1, '' end
 	assert(r.wifi_state() == nil)
 end)
 test('Only UP interfaces enable their PHY for scanning', function()
+	phys = {'/sys/class/ieee80211/phy0', '/sys/class/ieee80211/phy1'}
 	r.command = function(argv)
 		return 0, argv[2] == 'phy' and 'Wiphy phy0\nWiphy phy1'
 			or 'phy#0\n Interface client0\nphy#1\n Interface client1'
@@ -283,8 +293,9 @@ end)
 test('WAN updater marks only its child and has no kill timeout', function()
 	r.command = function(argv, timeout)
 		assert(argv[1] == 'env' and argv[2] == 'LD_PRELOAD=libpacketmark.so')
-		assert(argv[3] == 'LIBPACKETMARK_MARK=1' and argv[4] == '/usr/sbin/autoupdater')
-		assert(argv[7] == 'offline6' and timeout == nil)
+		assert(argv[3] == 'LIBPACKETMARK_MARK=1' and argv[4] == '/usr/bin/gluon-wan')
+		assert(argv[5] == '/usr/sbin/autoupdater' and argv[6] == '-f' and argv[7] == '-b')
+		assert(argv[8] == 'offline6' and timeout == nil)
 		return 0
 	end
 	assert(r.update_wan('offline6') == 0)

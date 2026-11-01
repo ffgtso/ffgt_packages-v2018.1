@@ -1,3 +1,11 @@
+# Änderungen in Version 6-4
+
+- WLAN-PHYs vor iw über sysfs erkennen: Offloader ohne nl80211 erreichen WAN.
+- Bei vorhandenen PHYs bleiben iw-Fehler ein Abbruchgrund.
+- WAN-Autoupdater zusätzlich über gluon-wan für die bestehende WAN-DNS-Umleitung.
+- libpacketmark für IPv6-WAN-Routing beibehalten; gluon-mesh-vpn-core als Abhängigkeit.
+- 55 simulierte Tests unter Lua 5.1; kein Firmware-Build oder Hardwaretest.
+
 # Änderungen in Version 6-3
 
 - Mindestens 15 Minuten Uptime vor Gateway-/WLAN-/WAN-Aktionen, auch mit -f.

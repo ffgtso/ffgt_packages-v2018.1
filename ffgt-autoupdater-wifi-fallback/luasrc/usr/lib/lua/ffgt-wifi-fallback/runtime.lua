@@ -105,10 +105,10 @@ end
 
 -- Distinguish absent hardware from administratively disabled WLAN.
 function M.wifi_state()
-	local rc, text = M.command({'iw', 'phy'}, 5, true)
-	if rc ~= 0 then return nil end
-	if not text:match('Wiphy%s+%S+') then return 'absent' end
-	rc, text = M.command({'iw', 'dev'}, 5, true)
+	-- iw cannot initialize without nl80211 (common on Ethernet-only nodes).
+	-- Inspect sysfs first so these nodes still reach the WAN fallback.
+	if #util.glob('/sys/class/ieee80211/*') == 0 then return 'absent' end
+	local rc, text = M.command({'iw', 'dev'}, 5, true)
 	if rc ~= 0 then return nil end
 	local phy, active = nil, {}
 	for line in text:gmatch('[^\n]+') do
@@ -136,9 +136,10 @@ end
 
 function M.update_wan(branch)
 	-- WAN IPv6 routes use mark 1 in Gluon 2018.2. Keep the environment local
-	-- to this child; do not change routing tables or the WLAN updater.
+	-- to this child. gluon-wan additionally selects the process group whose
+	-- DNS requests are redirected to the WAN resolver on port 54.
 	return M.command({'env', 'LD_PRELOAD=libpacketmark.so', 'LIBPACKETMARK_MARK=1',
-		'/usr/sbin/autoupdater', '-f', '-b', branch}, nil)
+		'/usr/bin/gluon-wan', '/usr/sbin/autoupdater', '-f', '-b', branch}, nil)
 end
 
 function M.scan(active_phys)

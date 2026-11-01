@@ -28,7 +28,7 @@ Das Paket nutzt `gluon.mk` einschließlich LuaSrcDiet. Nur `files/` und `luasrc/
 werden installiert; Tests, Dokumentation und Prüfsummen kommen nicht auf den Router.
 Alle Laufzeit-Abhängigkeiten sind bereits im entsprechenden Gluon/BATMAN-Aufbau
 vorhanden: gluon-autoupdater/gluon-core, iw, batctl, libiwinfo-lua, luaposix,
-lua-jsonc, micrond, libpacketmark und der gepatchte gluon-ssid-changer. Es wird keine neue native Hilfs-Binärdatei benötigt.
+lua-jsonc, micrond, libpacketmark, gluon-mesh-vpn-core und der gepatchte gluon-ssid-changer. Es wird keine neue native Hilfs-Binärdatei benötigt.
 
 Für einen Wechsel von der alten Fassung ist ein reguläres Firmware-Upgrade der
 vorgesehene Weg. Kein bloßes Kopieren über eine laufende Altinstallation: deren
@@ -99,8 +99,10 @@ mit Neustart auslösen. Es ist kein Trockenlauf.
 
 ## WLAN-Auswahl und WAN-Fallback
 
-Vor einem Scan wird mit `iw phy` und `iw dev` zwischen fehlender Hardware,
-vorhandener ausgeschalteter Hardware und aktiven Interfaces unterschieden.
+Vor einem Scan werden PHY-Einträge unter `/sys/class/ieee80211/*` geprüft.
+Ohne registrierte PHYs folgt direkt der WAN-Pfad, auch wenn `nl80211` fehlt.
+Nur bei vorhandenen PHYs prüft `iw dev` die Interfaces; ein Fehler dabei wird
+nicht als fehlende Hardware gewertet.
 Aktiv bedeutet administrativ UP (`IFF_UP`), nicht zwingend bestehende Verbindung.
 Nur PHYs mit mindestens einem UP-Interface werden gescannt. Sind Funkgeräte
 vorhanden, aber alle Interfaces aus, bleibt das Gerät unverändert. Ein Scanfehler
@@ -123,11 +125,22 @@ wird protokolliert und übersprungen; ein regulärer Standardbranch ist im WAN-P
 nicht erforderlich. Es werden keine Mirror-Adressen oder Schlüssel erfunden.
 Die Branch-Namen erzwingen selbst keine Adressfamilie: `offline4` muss passende
 IPv4-Mirrors, `offline6` passende IPv6-Mirrors enthalten. Numerische Adressen
-vermeiden eine Abhängigkeit von DNS; Hostnamen benötigen einen funktionierenden
-Systemresolver. Die WAN-DNS-Konfiguration wird nicht verändert.
+vermeiden eine Abhängigkeit von DNS; Hostnamen werden über Gluons vorhandenen
+WAN-Resolver aufgelöst. Dieser muss laufen und geeignete WAN-DNS-Server kennen.
 
 Nur die WAN-Autoupdater-Kindprozesse erhalten `LD_PRELOAD=libpacketmark.so` und
 `LIBPACKETMARK_MARK=1`, damit Gluons WAN-IPv6-Regel die Tabelle 1 verwendet.
+Zusätzlich startet `/usr/bin/gluon-wan` den Autoupdater mit der primären Gruppe
+`gluon-mesh-vpn`. Die vorhandene Gluon-Firewallregel leitet dessen lokale
+UDP-DNS-Anfragen an `127.0.0.1:54` um. Der Wrapper allein setzt in Gluon 2018.2
+keine Paketmarkierung, deshalb bleiben beide Mechanismen erforderlich.
+Der effektive WAN-Aufruf lautet beispielsweise:
+
+```sh
+env LD_PRELOAD=libpacketmark.so LIBPACKETMARK_MARK=1 \
+  /usr/bin/gluon-wan /usr/sbin/autoupdater -f -b offline6
+```
+
 WLAN, Routen und Resolver werden vom WAN-Fallback nicht umkonfiguriert. Normale
 Autoupdater-/sysupgrade-Hooks können nach erfolgreichem Download Dienste stoppen.
 
@@ -217,7 +230,7 @@ Das kleine iw 4.14 wurde auf dem Entwicklungsrechner mit den zugehörigen
 OpenWrt-Patches gebaut; `connect` bleibt enthalten. Es wurde keine Funkverbindung
 mit diesem Host-Build hergestellt.
 
-Die 54 Regressionstests unter Lua 5.1 prüfen Auswahl, IPv6-Kriterien, Prozess-
+Die 55 Regressionstests unter Lua 5.1 prüfen Auswahl, IPv6-Kriterien, Prozess-
 und Argumentbehandlung, begrenzte Wartephasen, Ablauf nach Fehlern, Aufräumen,
 Wartebedingungen, Gateway-Kriterium, WLAN-Zustand, WAN-Routen und Branches, Sperre, Konfiguration
 und Cron-Erzeugung. Betriebssystem- und
