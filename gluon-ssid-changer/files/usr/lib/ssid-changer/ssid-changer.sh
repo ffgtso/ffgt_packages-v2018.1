@@ -54,6 +54,11 @@ log() {
 	logger -t gluon-offline-ssid -- "$*"
 }
 
+safety_exit() {
+	log "$1"
+	exit 2
+}
+
 # micron may start another instance while this one is still running.
 mkdir "$LOCK" 2>/dev/null || exit 0
 WORK=
@@ -78,8 +83,8 @@ fi
 
 UT=$(sed 's/\..*//g' /proc/uptime)
 update_gateway_status
-pgrep -f autoupdater >/dev/null && (log 'autoupdater running, exiting' ; exit 0)
-[ $UT -gt 900 ] || (log 'up less than 15 minutes, exiting' ; exit 0)
+pgrep -f autoupdater >/dev/null && safety_exit 'autoupdater running, exiting'
+[ $UT -gt 900 ] || safety_exit 'up less than 15 minutes, exiting'
 
 # Command errors or an unsupported selected-row format are not an offline
 # measurement. An empty, successfully read gateway table *is* offline.
