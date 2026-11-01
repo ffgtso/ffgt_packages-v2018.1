@@ -1,10 +1,8 @@
 #!/usr/bin/lua
 local runtime = require 'ffgt-wifi-fallback.runtime'
 local core = require 'ffgt-wifi-fallback.core'
-local util = require 'gluon.util'
 local uci = runtime.uci
 local config = 'autoupdater-wifi-fallback'
-local timer = '/tmp/ffgt-wifi-fallback.unreachable'
 local force, branch = false, uci:get('autoupdater', 'settings', 'branch')
 local i = 1
 while arg[i] do
@@ -19,30 +17,43 @@ while arg[i] do
 	end
 	i = i + 1
 end
-if not branch or not uci:get('autoupdater', branch) then
-	runtime.log('Missing autoupdater branch configuration')
-	os.exit(1)
-end
+-- Cron may invoke us earlier; do no gateway/WLAN/WAN work until both
+-- minimum uptime and the SSID changer's continuous outage interval are met.
+-- This applies to forced invocations as well.
+if not runtime.recovery_due() then os.exit(0) end
 local lock = runtime.lock()
 if not lock then os.exit(0) end
 runtime.install_signals()
 if runtime.upgrading() then os.exit(0) end
-if not force then
-	if not uci:get_bool(config, 'settings', 'enabled')
-		or not uci:get_bool('autoupdater', 'settings', 'enabled') then os.exit(0) end
-	local now = runtime.uptime()
-	if now < 3600 then os.exit(0) end
-	if runtime.mesh_reachable() then os.remove(timer); os.exit(0) end
-	local since = tonumber(util.readfile(timer) or '')
-	if not since or since > now then
-		local f = assert(io.open(timer, 'w'))
-		f:write(tostring(now)); f:close()
-		os.exit(0)
-	end
-	if now - since < 7200 then os.exit(0) end
+if not force and (not uci:get_bool(config, 'settings', 'enabled')
+	or not uci:get_bool('autoupdater', 'settings', 'enabled')) then os.exit(0) end
+-- Even -f never overrides the sole offline criterion: no BATMAN gateways.
+local gateways = runtime.has_gateways()
+if gateways == nil then
+	runtime.log('Cannot read BATMAN gateway list; skipping offline update')
+	os.exit(1)
 end
--- Scanning runs before WiFi teardown; unsupported devices are skipped.
-local ok, candidates = pcall(runtime.scan)
+if gateways then os.exit(0) end
+local state, active_phys = runtime.wifi_state()
+if not state then
+	runtime.log('Cannot determine WLAN state')
+	os.exit(1)
+end
+if state == 'absent' then
+	os.exit(core.wan_round(runtime) and 0 or 1)
+end
+if state ~= 'active' then
+	runtime.log('WLAN hardware present but no interface UP; skipping WLAN fallback')
+	os.exit(0)
+end
+if not branch or not runtime.branch_exists(branch) then
+	runtime.log('Missing autoupdater branch configuration')
+	os.exit(1)
+end
+-- Scan only PHYs with an UP interface, before tearing down WiFi.
+local ok, candidates = pcall(runtime.scan, active_phys)
 if not ok then runtime.log(tostring(candidates)); os.exit(1) end
 runtime.log('Open Freifunk candidates: ' .. #candidates)
+-- Gateways may have appeared while scanning. Never start recovery then.
+if runtime.has_gateways() ~= false then os.exit(0) end
 os.exit(core.round(runtime, candidates, branch) and 0 or 1)

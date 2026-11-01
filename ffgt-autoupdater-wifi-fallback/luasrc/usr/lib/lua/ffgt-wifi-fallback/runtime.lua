@@ -79,6 +79,12 @@ function M.uptime()
 	return tonumber((util.readfile('/proc/uptime') or ''):match('^[%d.]+')) or 0
 end
 
+function M.recovery_due()
+	return core.recovery_due(M.uptime(),
+		util.readfile('/tmp/ssid-changer-gateway-status'),
+		util.readfile('/proc/sys/kernel/random/boot_id'))
+end
+
 function M.lock()
 	local fd = fcntl.open('/var/lock/ffgt-wifi-fallback.lock', bit.bor(fcntl.O_WRONLY, fcntl.O_CREAT), 384)
 	if not fd then return nil end
@@ -90,23 +96,57 @@ function M.lock()
 	return fd
 end
 
-function M.mesh_reachable()
-	local text = util.readfile('/sys/kernel/debug/batman_adv/bat0/gateways') or ''
-	for line in text:gmatch('[^\n]+') do
-		local mac = line:match('(%x%x:%x%x:%x%x:%x%x:%x%x:%x%x)')
-		if mac and M.command({'batctl', 'ping', '-t', '2', '-c', '1', mac}, 5, true) == 0 then
-			return true
-		end
-	end
-	return false
+-- Unknown gateway state must not trigger a recovery update.
+function M.has_gateways()
+	local rc, text = M.command({'batctl', 'gwl', '-H'}, 5, true)
+	if rc ~= 0 then return nil end
+	return text:match('%x%x:%x%x:%x%x:%x%x:%x%x:%x%x') ~= nil
 end
 
-function M.scan()
+-- Distinguish absent hardware from administratively disabled WLAN.
+function M.wifi_state()
+	local rc, text = M.command({'iw', 'phy'}, 5, true)
+	if rc ~= 0 then return nil end
+	if not text:match('Wiphy%s+%S+') then return 'absent' end
+	rc, text = M.command({'iw', 'dev'}, 5, true)
+	if rc ~= 0 then return nil end
+	local phy, active = nil, {}
+	for line in text:gmatch('[^\n]+') do
+		local id = line:match('^phy#(%d+)')
+		if id then phy = 'phy' .. id end
+		local name = line:match('Interface%s+(%S+)')
+		if phy and name then
+			local flags = tonumber(util.readfile('/sys/class/net/' .. name .. '/flags') or '')
+			if flags and flags % 2 == 1 then active[phy] = true end
+		end
+	end
+	return next(active) and 'active' or 'inactive', active
+end
+
+function M.wan_routes()
+	if not util.readfile('/sys/class/net/br-wan/ifindex') then return {} end
+	-- /proc includes IPv6 policy tables, including Gluon's WAN table 1.
+	return core.wan_routes(util.readfile('/proc/net/route') or '',
+		util.readfile('/proc/net/ipv6_route') or '')
+end
+
+function M.branch_exists(branch)
+	return uci:get('autoupdater', branch) ~= nil
+end
+
+function M.update_wan(branch)
+	-- WAN IPv6 routes use mark 1 in Gluon 2018.2. Keep the environment local
+	-- to this child; do not change routing tables or the WLAN updater.
+	return M.command({'env', 'LD_PRELOAD=libpacketmark.so', 'LIBPACKETMARK_MARK=1',
+		'/usr/sbin/autoupdater', '-f', '-b', branch}, nil)
+end
+
+function M.scan(active_phys)
 	local result, seen = {}, {}
 	uci:foreach('wireless', 'wifi-device', function(radio)
 		if M.cancelled() then return end
 		local phy = util.find_phy(radio)
-		if not phy then return end
+		if not phy or (active_phys and not active_phys[phy]) then return end
 		local kind = iwinfo.type(radio['.name'])
 		local backend = kind and iwinfo[kind]
 		if not backend then return end

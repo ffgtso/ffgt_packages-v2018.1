@@ -26,16 +26,32 @@ PASS IPv6 readiness polls own logical interface
 PASS IPv6 deadline prevents endless wait
 PASS WiFi teardown waits for interfaces to disappear
 PASS Updater preserves branch argument and no outer timeout
-PASS Gateway ping uses validated MAC and finite timeout
+PASS Gateway presence prevents fallback without ping
+PASS No radio differs from disabled radio
+PASS Only UP interfaces enable their PHY for scanning
+PASS Failed device registration prevents protocol start
+PASS WAN accepts IPv4 IPv6 and both default routes
+PASS Other interfaces reject routes and non-default routes are ignored
+PASS WAN requires an existing br-wan
+PASS WAN updater marks only its child and has no kill timeout
+PASS WAN tries both branches even after exit zero
+PASS WAN missing routes and branches skip only that family
+PASS WAN stops on upgrade handoff cancellation or new gateway
 PASS Upgrade preserves disabled setting and configures IPv6 firewall
 PASS Cleanup stops IPv6 before deleting temporary station
 PASS Incomplete network teardown is reported as failure
+PASS Recovery requires 15 minutes uptime and one hour outage
+PASS Missing online stale malformed or foreign-boot status cannot trigger
+PASS Runtime reads SSID changer state and monotonic boot identity
+PASS Timing gate blocks WLAN and WAN even with force
 PASS Disabled updater does not start fallback
-PASS Boot grace period
-PASS First outage starts uptime timer only
-PASS Recovery delay then candidate round
-PASS Reachable mesh clears timer
-PASS Force bypasses uptime mesh and enabled checks
-PASS Missing branch fails before touching WLAN
-PASS Second instance exits without touching WLAN
-40 tests passed (Lua 5.1)
+PASS Absent gateways allow WLAN fallback after timing gate
+PASS Force cannot override gateway presence or unknown gateway state
+PASS Force may override disabled activation
+PASS Missing WLAN branch fails before scan
+PASS No WLAN uses WAN even without regular branch
+PASS Disabled WLAN is neither scanned nor treated as absent hardware
+PASS Second instance or existing upgrade leaves network untouched
+54 tests passed (Lua 5.1)
+
+Router APIs mocked; no firmware build or hardware test.

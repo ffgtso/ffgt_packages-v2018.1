@@ -181,12 +181,14 @@ test('Connection passes SSID and BSSID separately without -w', function()
 	local n = net('Freifunk Test')
 	assert(r.connect(n))
 	assert(commands[3][4] == 'connect' and commands[3][5] == n.ssid and commands[3][6] == n.bssid)
-	assert(commands[#commands][1] == 'ifup')
+	assert(commands[#commands - 1][4] == 'add_device')
+	assert(commands[#commands - 1][5] == '{"name":"ffgtfallback","link-ext":true}')
+	assert(commands[#commands][1] == 'ubus' and commands[#commands][4] == 'up')
 end)
 test('Wrong BSSID never starts IPv6', function()
 	local starts, links = 0, 0
 	r.command = function(argv)
-		if argv[1] == 'ifup' then starts = starts + 1 end
+		if argv[1] == 'ubus' and argv[4] == 'up' then starts = starts + 1 end
 		if argv[4] == 'link' then links = links + 1 end
 		return 0, 'Connected to 00:00:00:00:00:00'
 	end
@@ -218,13 +220,101 @@ test('Updater preserves branch argument and no outer timeout', function()
 	end
 	assert(r.update('stable') == 1)
 end)
-test('Gateway ping uses validated MAC and finite timeout', function()
-	files['/sys/kernel/debug/batman_adv/bat0/gateways'] = '* 00:11:22:33:44:55 (255)'
+test('Gateway presence prevents fallback without ping', function()
 	r.command = function(argv, timeout)
-		assert(argv[1] == 'batctl' and argv[7] == '00:11:22:33:44:55' and timeout == 5); return 0
+		assert(argv[1] == 'batctl' and argv[2] == 'gwl' and argv[3] == '-H' and timeout == 5)
+		return 0, '* 00:11:22:33:44:55 (255)'
 	end
-	assert(r.mesh_reachable())
-	files['/sys/kernel/debug/batman_adv/bat0/gateways'] = ''; assert(not r.mesh_reachable())
+	assert(r.has_gateways() == true)
+	r.command = function() return 0, 'No gateways in range.\n' end
+	assert(r.has_gateways() == false)
+	r.command = function() return 1, '' end
+	assert(r.has_gateways() == nil)
+end)
+test('No radio differs from disabled radio', function()
+	r.command = function() return 0, '' end
+	assert(r.wifi_state() == 'absent')
+	r.command = function(argv) return 0, argv[2] == 'phy' and 'Wiphy phy0' or 'phy#0' end
+	assert(r.wifi_state() == 'inactive')
+	r.command = function() return 1, '' end
+	assert(r.wifi_state() == nil)
+end)
+test('Only UP interfaces enable their PHY for scanning', function()
+	r.command = function(argv)
+		return 0, argv[2] == 'phy' and 'Wiphy phy0\nWiphy phy1'
+			or 'phy#0\n Interface client0\nphy#1\n Interface client1'
+	end
+	files['/sys/class/net/client0/flags'] = '0x1003\n'
+	files['/sys/class/net/client1/flags'] = '0x1002\n'
+	local state, phys = r.wifi_state()
+	assert(state == 'active' and phys.phy0 and not phys.phy1)
+end)
+test('Failed device registration prevents protocol start', function()
+	local starts = 0
+	r.command = function(argv)
+		if argv[4] == 'link' then return 0, 'Connected to 00:11:22:33:44:55' end
+		if argv[4] == 'add_device' then return 1 end
+		if argv[4] == 'up' then starts = starts + 1 end
+		return 0, ''
+	end
+	assert(not r.connect(net()) and starts == 0)
+end)
+local v4 = 'br-wan 00000000 0100000A 0003 0 0 10 00000000 0 0 0\n'
+local v6 = string.rep('0', 32) .. ' 00 ' .. string.rep('0', 32)
+	.. ' 00 fe800000000000000000000000000001 00000400 00000000 00000000 00000003 br-wan\n'
+test('WAN accepts IPv4 IPv6 and both default routes', function()
+	local routes = core.wan_routes(v4, v6)
+	assert(routes[4] and routes[6])
+	assert(core.wan_routes(v4, '')[4] and not core.wan_routes(v4, '')[6])
+	assert(core.wan_routes('', v6)[6] and not core.wan_routes('', v6)[4])
+end)
+test('Other interfaces reject routes and non-default routes are ignored', function()
+	assert(not next(core.wan_routes(v4:gsub('br%-wan', 'br-client'), v6:gsub('br%-wan', 'lo'))))
+	assert(not next(core.wan_routes(v4:gsub('0003', '0203'), v6:gsub('00000003', '00000203'))))
+	assert(not next(core.wan_routes(v4:gsub('0003', '0002'), v6:gsub('00000003', '00000002'))))
+	assert(not next(core.wan_routes(v4:gsub('00000000 0 0 0', '00FFFFFF 0 0 0'), v6:gsub(' 00 ', ' 40 ', 1))))
+end)
+test('WAN requires an existing br-wan', function()
+	files['/proc/net/route'], files['/proc/net/ipv6_route'] = v4, v6
+	assert(not next(r.wan_routes()))
+	files['/sys/class/net/br-wan/ifindex'] = '5'
+	assert(r.wan_routes()[4] and r.wan_routes()[6])
+end)
+test('WAN updater marks only its child and has no kill timeout', function()
+	r.command = function(argv, timeout)
+		assert(argv[1] == 'env' and argv[2] == 'LD_PRELOAD=libpacketmark.so')
+		assert(argv[3] == 'LIBPACKETMARK_MARK=1' and argv[4] == '/usr/sbin/autoupdater')
+		assert(argv[7] == 'offline6' and timeout == nil)
+		return 0
+	end
+	assert(r.update_wan('offline6') == 0)
+end)
+local function wan_ops()
+	local calls = {}
+	return {calls = calls, upgrading = function() return false end,
+		cancelled = function() return false end, has_gateways = function() return false end,
+		wan_routes = function() return {[4] = true, [6] = true} end,
+		branch_exists = function() return true end, log = function() end,
+		update_wan = function(branch) calls[#calls + 1] = branch; return 0 end}
+end
+test('WAN tries both branches even after exit zero', function()
+	local o = wan_ops(); assert(core.wan_round(o))
+	assert(#o.calls == 2 and o.calls[1] == 'offline4' and o.calls[2] == 'offline6')
+end)
+test('WAN missing routes and branches skip only that family', function()
+	local o = wan_ops(); o.wan_routes = function() return {[6] = true} end
+	assert(core.wan_round(o) and #o.calls == 1 and o.calls[1] == 'offline6')
+	o = wan_ops(); o.branch_exists = function(b) return b ~= 'offline4' end
+	assert(core.wan_round(o) and #o.calls == 1 and o.calls[1] == 'offline6')
+end)
+test('WAN stops on upgrade handoff cancellation or new gateway', function()
+	for _, condition in ipairs({'upgrading', 'cancelled', 'has_gateways'}) do
+		local o = wan_ops()
+		o[condition] = function() return #o.calls > 0 end
+		assert(core.wan_round(o) and #o.calls == 1)
+	end
+	local o = wan_ops(); o.has_gateways = function() return nil end
+	assert(not core.wan_round(o) and #o.calls == 0)
 end)
 
 -- Upgrade script: exercise generated UCI configuration and cron scheduling.
@@ -272,64 +362,99 @@ test('Incomplete network teardown is reported as failure', function()
  assert(ok and not result)
 end)
 
--- Entry point tests: uptime timer, activation and explicit force.
-local real_core = package.loaded['ffgt-wifi-fallback.core']
+test('Recovery requires 15 minutes uptime and one hour outage', function()
+ assert(not core.recovery_due(899, 'boot 899 0', 'boot'))
+ assert(not core.recovery_due(900, 'boot 900 0', 'boot'))
+ assert(not core.recovery_due(3659, 'boot 3659 60', 'boot'))
+ assert(not core.recovery_due(3660, 'boot 3600 60', 'boot'))
+ assert(core.recovery_due(3660, 'boot 3660 60', 'boot'))
+end)
+test('Missing online stale malformed or foreign-boot status cannot trigger', function()
+ for _, state in ipairs({'boot 4000 -', 'boot 3879 1', 'other 4000 1',
+  'boot 4001 1', 'boot 4000 4001', 'boot 4000 -1', 'boot 4000 1 extra', ''}) do
+  assert(not core.recovery_due(4000, state, 'boot'), state)
+ end
+ assert(not core.recovery_due(4000, nil, 'boot'))
+ assert(not core.recovery_due(4000, 'boot 4000 1', nil))
+ assert(core.recovery_due(4000, 'boot 3880 1\n', 'boot\n'))
+end)
+test('Runtime reads SSID changer state and monotonic boot identity', function()
+ files['/proc/uptime'] = '4000.9 1000.0'
+ files['/proc/sys/kernel/random/boot_id'] = 'boot\n'
+ files['/tmp/ssid-changer-gateway-status'] = 'boot 3990 60\n'
+ assert(r.recovery_due())
+ files['/tmp/ssid-changer-gateway-status'] = nil
+ assert(not r.recovery_due())
+end)
+
+-- Entry point dispatch: timing must gate both WLAN and WAN before work.
 local real_runtime = package.loaded['ffgt-wifi-fallback.runtime']
+local real_core = package.loaded['ffgt-wifi-fallback.core']
 local function entry(options)
- local calls = {round = 0, scan = 0, timer = false}
- local fake_uci = {}
- fake_uci.get = function(_, c, section, option)
-  if option == 'branch' then return 'stable' end
-  if section == 'stable' and not options.missing_branch then return 'branch' end
- end
- fake_uci.get_bool = function() return not options.disabled end
+ local calls = {round = 0, scan = 0, wan = 0}
+ local fake_uci = {get = function() if not options.no_default then return 'stable' end end,
+  get_bool = function() return not options.disabled end}
  local fake = {uci = fake_uci, log = function()end,
+  recovery_due = function()return not options.not_due end,
   lock = function()return not options.locked and 9 or nil end,
-  install_signals = function()end, upgrading = function()return false end, uptime = function()return options.uptime or 15000 end,
-  mesh_reachable = function()return options.mesh or false end,
-  scan = function()calls.scan = calls.scan + 1; return {net()} end}
+  install_signals = function()end, upgrading = function()return options.upgrading end,
+  has_gateways = function() if options.unknown then return nil end; return options.mesh or false end,
+  wifi_state = function()return options.wifi or 'active', {phy0 = true} end,
+  branch_exists = function()return not options.missing_branch end,
+  scan = function(phys) assert(phys.phy0); calls.scan = calls.scan + 1; return {net()} end}
  package.loaded['ffgt-wifi-fallback.runtime'] = fake
- package.loaded['ffgt-wifi-fallback.core'] = {round = function()calls.round = calls.round + 1; return true end}
- files['/tmp/ffgt-wifi-fallback.unreachable'] = options.since
- local saved_exit, saved_open, saved_arg, saved_remove = os.exit, io.open, arg, os.remove
+ package.loaded['ffgt-wifi-fallback.core'] = {
+  round = function()calls.round = calls.round + 1; return true end,
+  wan_round = function()calls.wan = calls.wan + 1; return true end}
+ local saved_exit, saved_arg = os.exit, arg
  os.exit = function(code) error({exit = code}) end
- io.open = function(path, mode)
-  assert(path == '/tmp/ffgt-wifi-fallback.unreachable' and mode == 'w')
-  return {write = function(_, value)calls.timer = value end, close = function()end}
- end
- os.remove = function(path) calls.removed = path end
  arg = options.force and {'-f'} or {}
  local ok, err = pcall(dofile, 'luasrc/usr/sbin/autoupdater-wifi-fallback')
- os.exit, io.open, arg, os.remove = saved_exit, saved_open, saved_arg, saved_remove
+ os.exit, arg = saved_exit, saved_arg
  package.loaded['ffgt-wifi-fallback.runtime'] = real_runtime
  package.loaded['ffgt-wifi-fallback.core'] = real_core
  assert(not ok and type(err) == 'table' and err.exit ~= nil, tostring(err))
  calls.exit = err.exit
  return calls
 end
+test('Timing gate blocks WLAN and WAN even with force', function()
+ for _, wifi in ipairs({'active', 'absent'}) do
+  for _, force in ipairs({false, true}) do
+   local c = entry({not_due = true, wifi = wifi, force = force})
+   assert(c.exit == 0 and c.scan == 0 and c.wan == 0 and c.round == 0)
+  end
+ end
+end)
 test('Disabled updater does not start fallback', function()
- local c = entry({disabled = true}); assert(c.exit == 0 and c.scan == 0)
+ local c = entry({disabled = true}); assert(c.exit == 0 and c.scan == 0 and c.wan == 0)
 end)
-test('Boot grace period', function()
- local c = entry({uptime = 1200}); assert(c.scan == 0 and not c.timer)
+test('Absent gateways allow WLAN fallback after timing gate', function()
+ assert(entry({}).round == 1)
 end)
-test('First outage starts uptime timer only', function()
- local c = entry({uptime = 4000}); assert(c.scan == 0 and c.timer == '4000')
+test('Force cannot override gateway presence or unknown gateway state', function()
+ for _, wifi in ipairs({'active', 'absent'}) do
+  local c = entry({force = true, mesh = true, wifi = wifi})
+  assert(c.round == 0 and c.wan == 0 and c.scan == 0)
+  c = entry({force = true, unknown = true, wifi = wifi})
+  assert(c.exit == 1 and c.round == 0 and c.wan == 0)
+ end
 end)
-test('Recovery delay then candidate round', function()
- assert(entry({uptime = 10000, since = '4000'}).round == 0)
- assert(entry({uptime = 11200, since = '4000'}).round == 1)
+test('Force may override disabled activation', function()
+ assert(entry({force = true, disabled = true}).round == 1)
 end)
-test('Reachable mesh clears timer', function()
- local c = entry({mesh = true, since = '4000'}); assert(c.scan == 0 and c.removed)
-end)
-test('Force bypasses uptime mesh and enabled checks', function()
- assert(entry({force = true, disabled = true, uptime = 2, mesh = true}).round == 1)
-end)
-test('Missing branch fails before touching WLAN', function()
+test('Missing WLAN branch fails before scan', function()
  local c = entry({missing_branch = true, force = true}); assert(c.exit == 1 and c.scan == 0)
 end)
-test('Second instance exits without touching WLAN', function()
- local c = entry({locked = true, force = true}); assert(c.exit == 0 and c.scan == 0)
+test('No WLAN uses WAN even without regular branch', function()
+ local c = entry({wifi = 'absent', missing_branch = true, no_default = true})
+ assert(c.wan == 1 and c.scan == 0 and c.round == 0)
+end)
+test('Disabled WLAN is neither scanned nor treated as absent hardware', function()
+ local c = entry({wifi = 'inactive'}); assert(c.scan == 0 and c.wan == 0 and c.round == 0)
+end)
+test('Second instance or existing upgrade leaves network untouched', function()
+ for _, opt in ipairs({{locked = true}, {upgrading = true}}) do
+  local c = entry(opt); assert(c.exit == 0 and c.scan == 0 and c.wan == 0)
+ end
 end)
 print(string.format('%d tests passed (%s)', total, _VERSION))

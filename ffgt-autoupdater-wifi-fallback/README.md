@@ -1,6 +1,6 @@
 # ffgt-autoupdater-wifi-fallback
 
-Kleiner WLAN-Rettungsupdater für **Gluon v2018.2.4**, speziell für Knoten mit
+Kleiner WLAN-/WAN-Rettungsupdater für **Gluon v2018.2.4**, speziell für Knoten mit
 knappem Flash, die ihre einzige Mesh-Anbindung verloren haben. Einsatzbeispiele:
 Wechsel von IBSS auf 802.11s, einer Batman-Version oder der Mesh-SSID.
 
@@ -28,7 +28,7 @@ Das Paket nutzt `gluon.mk` einschließlich LuaSrcDiet. Nur `files/` und `luasrc/
 werden installiert; Tests, Dokumentation und Prüfsummen kommen nicht auf den Router.
 Alle Laufzeit-Abhängigkeiten sind bereits im entsprechenden Gluon/BATMAN-Aufbau
 vorhanden: gluon-autoupdater/gluon-core, iw, batctl, libiwinfo-lua, luaposix,
-lua-jsonc und micrond. Es wird keine neue native Hilfs-Binärdatei benötigt.
+lua-jsonc, micrond, libpacketmark und der gepatchte gluon-ssid-changer. Es wird keine neue native Hilfs-Binärdatei benötigt.
 
 Für einen Wechsel von der alten Fassung ist ein reguläres Firmware-Upgrade der
 vorgesehene Weg. Kein bloßes Kopieren über eine laufende Altinstallation: deren
@@ -55,15 +55,37 @@ uci commit autoupdater-wifi-fallback
 ```
 
 Die Aufgabe läuft stündlich, zehn Minuten nach der Minutenposition des normalen
-Autoupdater-Zeitplans. In der ersten Stunde nach dem Boot wird nichts verändert.
-Anschließend wird ein monotoner Uptime-Zeitstempel im RAM gesetzt, wenn kein
-BATMAN-Gateway per `batctl ping` erreichbar ist. Nach mindestens weiteren zwei
-Stunden ohne erreichbares Gateway beginnt die erste Suchrunde. Der genaue Beginn
-hängt vom stündlichen Zeitplan ab. Nach einer erfolglosen Runde wird stündlich
-weiter versucht; eine wiederhergestellte Gateway-Verbindung löscht den Zähler.
-Ein NTP-Zeitsprung verändert diese Wartefrist nicht.
+Autoupdater-Zeitplans. Vor allen Gateway-/WLAN-/WAN-Aktionen müssen beide
+Bedingungen erfüllt sein:
 
-Ein unmittelbarer Testlauf ist möglich:
+- mindestens 900 Sekunden Uptime (15 Minuten seit dem Boot),
+- mindestens 3600 Sekunden ununterbrochen beobachtete Abwesenheit von
+  BATMAN-Gateways laut minütlichem SSID-Changer.
+
+Der gepatchte `ssid-changer.sh` schreibt vor seinen WLAN-/Hostapd-/Autoupdater-
+Abbruchbedingungen atomar `/tmp/ssid-changer-gateway-status`. Die Datei enthält
+Boot-ID, Uptime der letzten Beobachtung und Uptime der ersten Offline-Beobachtung;
+bei vorhandenen Gateways steht an letzter Stelle `-`. Sie funktioniert auch auf
+Offloadern ohne WLAN und bei deaktivierter SSID-Umschaltung. Der alte
+`/tmp/ssid-changer-count` bleibt ausschließlich für die SSID-Umschaltlogik erhalten.
+
+Die Gateway-Liste wird mit `batctl gwl -H` gelesen, ohne Ping oder TQ-Schwelle.
+Jede beobachtete Gateway-Rückkehr setzt das Offline-Intervall zurück. Ein
+Abfragefehler, eine andere Boot-ID, ein Uptime-Rücksprung oder eine Lücke über
+120 Sekunden verwirft die bisherige Kontinuität. Der Fallback akzeptiert nur
+Statusdaten aus demselben Boot, höchstens 120 Sekunden alt, deren letzte
+Beobachtung mindestens eine Stunde nach Beginn des Offline-Intervalls liegt.
+Eine aktuell erneut gelesene Gateway-Liste muss ebenfalls leer sein.
+
+Die Messung hat Minutengranularität; Änderungen zwischen zwei Beobachtungen
+werden nicht erfasst. Ohne neuen SSID-Changer/Statusdatei startet kein Fallback.
+Beide Pakete zusammen integrieren und den SSID-Changer-Commit in den Site-Feeds
+nach Übernahme der Änderungen entsprechend pinnen. Der nächste stündliche
+Aufruf nach Erfüllung beider Bedingungen startet den Versuch; beim Erreichen
+der Stunde wird kein zusätzlicher Lauf ausgelöst. Sperre und Upgrade-Markierung
+bleiben wirksam. Alle Zeitmessungen verwenden Uptime statt NTP-/Wanduhrzeit.
+
+Ein manueller Aufruf ist möglich (auch dabei gelten die Wartebedingungen):
 
 ```sh
 /usr/sbin/autoupdater-wifi-fallback -f
@@ -71,13 +93,47 @@ Ein unmittelbarer Testlauf ist möglich:
 /usr/sbin/autoupdater-wifi-fallback -f -b stable
 ```
 
-`-f` übergeht auch Aktivierung, Mindest-Uptime und Mesh-Prüfung. Es unterbricht
-für die Suchrunde sämtliche WLAN-Interfaces und kann ein echtes Firmware-Update
+`-f` übergeht die Aktivierung, aber niemals die Wartebedingungen oder Gateway-Prüfung. Im WLAN-Pfad
+unterbricht es für die Suchrunde sämtliche WLAN-Interfaces und kann ein echtes Firmware-Update
 mit Neustart auslösen. Es ist kein Trockenlauf.
 
-## Ablauf einer Suchrunde
+## WLAN-Auswahl und WAN-Fallback
 
-1. Alle über UCI und `gluon.util.find_phy` erkannten mac80211-Funkgeräte scannen.
+Vor einem Scan wird mit `iw phy` und `iw dev` zwischen fehlender Hardware,
+vorhandener ausgeschalteter Hardware und aktiven Interfaces unterschieden.
+Aktiv bedeutet administrativ UP (`IFF_UP`), nicht zwingend bestehende Verbindung.
+Nur PHYs mit mindestens einem UP-Interface werden gescannt. Sind Funkgeräte
+vorhanden, aber alle Interfaces aus, bleibt das Gerät unverändert. Ein Scanfehler
+oder null gefundene APs wird nicht als fehlende WLAN-Hardware interpretiert.
+
+Nur ohne WLAN-Hardware folgt der WAN-Pfad (z. B. EdgeRouter X oder x86-VM):
+
+1. Existenz von `br-wan` prüfen.
+2. Kernel-Routen aus `/proc/net/route` und `/proc/net/ipv6_route` auswerten.
+   Nur aktive Default-Routen auf `br-wan`, keine Reject-Routen, berücksichtigen.
+   Die IPv6-Ansicht umfasst auch Gluons separate WAN-Routingtabelle.
+3. Bei IPv4-Default-Route `autoupdater -f -b offline4` versuchen.
+4. Bei IPv6-Default-Route anschließend `autoupdater -f -b offline6` versuchen.
+   Exitcode 0 allein verhindert den zweiten Versuch nicht. Eine Upgrade-Markierung,
+   ein Abbruchsignal oder inzwischen vorhandene Gateways verhindern ihn.
+
+Die Branches `offline4` und `offline6` müssen mit Mirrors, Signaturschlüsseln und
+Signaturschwelle in `/etc/config/autoupdater` vorhanden sein. Ein fehlender Branch
+wird protokolliert und übersprungen; ein regulärer Standardbranch ist im WAN-Pfad
+nicht erforderlich. Es werden keine Mirror-Adressen oder Schlüssel erfunden.
+Die Branch-Namen erzwingen selbst keine Adressfamilie: `offline4` muss passende
+IPv4-Mirrors, `offline6` passende IPv6-Mirrors enthalten. Numerische Adressen
+vermeiden eine Abhängigkeit von DNS; Hostnamen benötigen einen funktionierenden
+Systemresolver. Die WAN-DNS-Konfiguration wird nicht verändert.
+
+Nur die WAN-Autoupdater-Kindprozesse erhalten `LD_PRELOAD=libpacketmark.so` und
+`LIBPACKETMARK_MARK=1`, damit Gluons WAN-IPv6-Regel die Tabelle 1 verwendet.
+WLAN, Routen und Resolver werden vom WAN-Fallback nicht umkonfiguriert. Normale
+Autoupdater-/sysupgrade-Hooks können nach erfolgreichem Download Dienste stoppen.
+
+## Ablauf einer WLAN-Suchrunde
+
+1. Über UCI und `gluon.util.find_phy` erkannte aktive mac80211-Funkgeräte scannen.
    Ausgewählt werden offene Infrastruktur-APs, deren SSID die Zeichenfolge
    `freifunk` in beliebiger Groß-/Kleinschreibung enthält. Verschlüsselte WLANs,
    IBSS und Mesh-BSS werden ausgelassen.
@@ -90,7 +146,9 @@ mit Neustart auslösen. Es ist kein Trockenlauf.
    Argumente direkt an `execvp`; es findet keine Shell-Auswertung statt.
 5. `iw connect` ohne `-w` starten und mit begrenzten Abfragen auf die Verbindung
    zur gewünschten BSSID warten. Bei Misserfolg folgt der nächste Kandidat.
-6. Das eigene netifd-Interface `ffgt_fallback6` aktivieren. Es nutzt `dhcpv6`
+6. Die Station mit ubus `add_device` und `link-ext: true` bei netifd anmelden,
+   anschließend `ffgt_fallback6` gezielt per ubus `up` aktivieren. Dadurch entfällt
+   der globale Netzwerk-Reload von `ifup`. Es nutzt `dhcpv6`
    mit SLAAC-Unterstützung, ohne Präfixdelegation und ohne DHCPv4. Es wird auf
    IPv6-GUA oder ULA, eine IPv6-Default-Route sowie angekündigte DNS-Server geprüft.
 7. Den vorhandenen Autoupdater mit `-f -b <Branch>` starten. Die bisherigen
@@ -113,7 +171,7 @@ automatisch. DNS-Daten und Routen werden von netifd beim Beenden wieder entfernt
 
 Die Erreichbarkeitsprüfung beschränkt sich auf die lokale IPv6-Konfiguration.
 Ob die Mirrors tatsächlich erreichbar sind, prüft der Autoupdater selbst. Es
-gibt keinen zusätzlichen Ping-/URL-Parser und keine IPv4-Fallback-Verbindung.
+gibt keinen zusätzlichen Ping-/URL-Parser. Der WLAN-Pfad verwendet nur IPv6.
 Mirrors müssen über das gewählte Netz per IPv6 erreichbar sein. Ein Netz ohne
 angekündigten DNS-Server wird übersprungen, auch wenn ein rein numerischer
 IPv6-Mirror theoretisch erreichbar wäre.
@@ -121,7 +179,7 @@ IPv6-Mirror theoretisch erreichbar wäre.
 ## Fristen und Fehlerbehandlung
 
 Einzelne Status-/iw-Aufrufe werden nach höchstens 5 Sekunden beendet;
-`ifup`/`ifdown` nach 15 und `wifi` nach 30 Sekunden. Assoziation und WLAN-Abbau
+`ifdown` nach 15 und `wifi` nach 30 Sekunden. Assoziation und WLAN-Abbau
 werden höchstens 30-mal, IPv6-Bereitschaft höchstens 60-mal geprüft, mit jeweils
 zusätzlicher Sekunde Pause. Dies sind begrenzte Abfragezahlen, keine garantierten
 30-/60-Sekunden-Gesamtfristen. Bei normal schneller Befehlsausführung endet ein
@@ -159,9 +217,10 @@ Das kleine iw 4.14 wurde auf dem Entwicklungsrechner mit den zugehörigen
 OpenWrt-Patches gebaut; `connect` bleibt enthalten. Es wurde keine Funkverbindung
 mit diesem Host-Build hergestellt.
 
-Die 40 Regressionstests unter Lua 5.1 prüfen Auswahl, IPv6-Kriterien, Prozess-
+Die 54 Regressionstests unter Lua 5.1 prüfen Auswahl, IPv6-Kriterien, Prozess-
 und Argumentbehandlung, begrenzte Wartephasen, Ablauf nach Fehlern, Aufräumen,
-Uptime-Wartefrist, Sperre, Konfiguration und Cron-Erzeugung. Betriebssystem- und
+Wartebedingungen, Gateway-Kriterium, WLAN-Zustand, WAN-Routen und Branches, Sperre, Konfiguration
+und Cron-Erzeugung. Betriebssystem- und
 Router-Schnittstellen sind dabei simuliert. Ausführen im Paketordner:
 
 ```sh

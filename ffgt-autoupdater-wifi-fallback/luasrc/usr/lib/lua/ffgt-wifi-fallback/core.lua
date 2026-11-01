@@ -24,6 +24,58 @@ function M.ipv6_ready(status)
 	return address and route and #(status['dns-server'] or {}) > 0
 end
 
+-- Only the minute-by-minute SSID changer can establish a continuous outage.
+-- Uptime avoids NTP jumps; boot identity and freshness reject obsolete state.
+function M.recovery_due(now, text, boot)
+	if type(now) ~= 'number' or now < 900 or type(text) ~= 'string'
+		or type(boot) ~= 'string' then return false end
+	local id, checked, since = text:match('^(%S+) (%d+) (%d+)%s*$')
+	if not id or id ~= boot:match('^(%S+)') then return false end
+	checked, since = tonumber(checked), tonumber(since)
+	return since <= checked and checked <= now and now - checked <= 120
+		and checked - since >= 3600
+end
+
+-- Accept only UP unicast default routes on the actual WAN bridge.
+function M.wan_routes(ipv4, ipv6)
+	local found = {}
+	local function usable(flags)
+		local n = tonumber(flags, 16)
+		return n and n % 2 == 1 and math.floor(n / 512) % 2 == 0
+	end
+	for line in ipv4:gmatch('[^\n]+') do
+		local f = {}; for value in line:gmatch('%S+') do f[#f + 1] = value end
+		if f[1] == 'br-wan' and f[2] == '00000000' and f[8] == '00000000'
+			and usable(f[4]) then found[4] = true end
+	end
+	for line in ipv6:gmatch('[^\n]+') do
+		local f = {}; for value in line:gmatch('%S+') do f[#f + 1] = value end
+		if f[1] == string.rep('0', 32) and f[2] == '00' and f[10] == 'br-wan'
+			and usable(f[9]) then found[6] = true end
+	end
+	return found
+end
+
+function M.wan_round(ops)
+	for _, family in ipairs({4, 6}) do
+		if ops.upgrading() or ops.cancelled() then return true end
+		-- Recheck before every attempt, including after offline4 returns.
+		local gateways = ops.has_gateways()
+		if gateways ~= false then return gateways == true end
+		local branch = 'offline' .. family
+		if ops.wan_routes()[family] then
+			if ops.branch_exists(branch) then
+				ops.log('Trying WAN branch ' .. branch .. ' on br-wan')
+				local rc = ops.update_wan(branch)
+				ops.log('WAN autoupdater returned ' .. tostring(rc))
+			else
+				ops.log('Missing autoupdater branch ' .. branch)
+			end
+		end
+	end
+	return true
+end
+
 -- ops is also used by the deterministic regression tests.
 function M.round(ops, candidates, branch)
 	if #candidates == 0 or ops.upgrading() then return true end
