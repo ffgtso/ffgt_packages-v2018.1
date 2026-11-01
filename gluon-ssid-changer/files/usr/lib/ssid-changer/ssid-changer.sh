@@ -10,6 +10,46 @@ RUN_DIR=${SSID_CHANGER_RUN_DIR:-/var/run}
 LOCK="$RUN_DIR/ssid-changer.lock"
 PENDING="$RUN_DIR/ssid-changer.reload"
 
+# Publish gateway history even without WLAN/hostapd or while an updater runs.
+# Format: boot-id last-observation-uptime offline-since-uptime (or '-' online).
+# A gap over 120 seconds or an unknown observation breaks the offline interval.
+update_gateway_status() {
+	GW_STATUS=/tmp/ssid-changer-gateway-status
+	GW_BOOT=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+	if [ -z "$GW_BOOT" ]; then
+		rm -f "$GW_STATUS"
+		return
+	fi
+	if ! GW_LIST=$(batctl gwl -H 2>/dev/null); then
+		rm -f "$GW_STATUS"
+		return
+	fi
+	GW_SINCE=-
+	if ! printf '%s\n' "$GW_LIST" | grep -Eq '[[:xdigit:]]{2}(:[[:xdigit:]]{2}){5}'; then
+		GW_SINCE=$UT
+		GW_OLD_BOOT= GW_CHECKED= GW_OLD_SINCE= GW_EXTRA=
+		if [ -r "$GW_STATUS" ]; then
+			read -r GW_OLD_BOOT GW_CHECKED GW_OLD_SINCE GW_EXTRA < "$GW_STATUS"
+		fi
+		case "$GW_CHECKED$GW_OLD_SINCE" in
+			*[!0-9]*|'') ;;
+			*)
+				if [ -n "$GW_CHECKED" ] && [ -n "$GW_OLD_SINCE" ] &&
+					[ "$GW_OLD_BOOT" = "$GW_BOOT" ] && [ -z "$GW_EXTRA" ] &&
+					[ "$GW_OLD_SINCE" -le "$GW_CHECKED" ] &&
+					[ "$GW_CHECKED" -le "$UT" ] && [ $((UT - GW_CHECKED)) -le 120 ]; then
+					GW_SINCE=$GW_OLD_SINCE
+				fi
+				;;
+		esac
+	fi
+	if printf '%s %s %s\n' "$GW_BOOT" "$UT" "$GW_SINCE" > "$GW_STATUS.$$"; then
+		mv -f "$GW_STATUS.$$" "$GW_STATUS" || rm -f "$GW_STATUS.$$" "$GW_STATUS"
+	else
+		rm -f "$GW_STATUS.$$" "$GW_STATUS"
+	fi
+}
+
 log() {
 	logger -t gluon-offline-ssid -- "$*"
 }
@@ -35,6 +75,11 @@ if [ "${#OFFLINE_SSID}" -gt 32 ]; then
 	TAIL=$(printf '%s' "$NODENAME" | cut -b "$((${#NODENAME} - LAST + 1))-")
 	OFFLINE_SSID="$OFFLINE_PREFIX$HEAD...$TAIL"
 fi
+
+UT=$(sed 's/\..*//g' /proc/uptime)
+update_gateway_status
+pgrep -f autoupdater >/dev/null && (log 'autoupdater running, exiting' ; exit 0)
+[ $UT -gt 900 ] || (log 'up less than 15 minutes, exiting' ; exit 0)
 
 # Command errors or an unsupported selected-row format are not an offline
 # measurement. An empty, successfully read gateway table *is* offline.
