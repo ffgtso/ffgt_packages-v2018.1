@@ -185,7 +185,16 @@ function M.connect(net)
 		local rc, text = M.command({'iw', 'dev', iface, 'link'}, 5, true)
 		local bssid = text:match('Connected to (%x%x:%x%x:%x%x:%x%x:%x%x:%x%x)')
 		if rc == 0 and bssid and bssid:lower() == net.bssid then
-			return M.command({'ifup', network}, 15) == 0
+			-- Manually created WLAN devices must be registered as external
+			-- with netifd; carrier alone does not make them available.
+			local object = 'network.interface.' .. network
+			if M.command({'ubus', 'call', object, 'add_device',
+				'{"name":"' .. iface .. '","link-ext":true}'}, 5) ~= 0 then
+				M.log('Cannot register fallback device with netifd')
+				return false
+			end
+			-- Avoid ifup's global network reload after creating the station.
+			return M.command({'ubus', 'call', object, 'up'}, 5) == 0
 		end
 		if interrupted then return false end
 		M.pause()
